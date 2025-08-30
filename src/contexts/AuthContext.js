@@ -114,7 +114,7 @@ export const AuthProvider = ({ children }) => {
     const result = await authModule.signInWithEmailAndPassword(auth, email, password);
     
     // Update user document on login
-    await createUserDocument(result.user);
+    //await createUserDocument(result.user);
     
     return result;
   };

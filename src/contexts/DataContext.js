@@ -13,155 +13,67 @@ export const useData = () => {
 };
 
 export const DataProvider = ({ children }) => {
-  const { user: authUser } = useAuth();
+  const { user: authUser, db } = useAuth();   // get Firestore instance from AuthContext
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Convert Firebase auth user to app user format
   useEffect(() => {
-    if (authUser) {
-      // Create app user from Firebase auth user
-      const appUser = {
-        id: authUser.uid,
-        email: authUser.email,
-        username: generateUsernameFromEmail(authUser.email),
-        displayName: authUser.displayName || generateUsernameFromEmail(authUser.email),
-        profilePicture: authUser.photoURL || null,
-        createdAt: authUser.metadata?.creationTime || new Date().toISOString(),
-        lastLoginAt: authUser.metadata?.lastSignInTime || new Date().toISOString(),
-        // Dummy calendar data for now
-        preferences: {
-          theme: 'system',
-          defaultView: 'month',
-          weekStartsOn: 'sunday',
-          notifications: true,
-        },
-        // Dummy events for testing
-        events: generateDummyEvents(),
-      };
-      setUser(appUser);
-    } else {
-      setUser(null);
-    }
-  }, [authUser]);
+    const fetchUserDoc = async () => {
+      if (!authUser || !db) {
+        setUser(null);
+        return;
+      }
 
-  // Helper function to generate username from email
-  const generateUsernameFromEmail = (email) => {
-    if (!email) return 'User';
-    const name = email.split('@')[0];
-    return name.charAt(0).toUpperCase() + name.slice(1).replace(/[._]/g, ' ');
-  };
+      setLoading(true);
+      try {
+        const firestoreModule = await import("firebase/firestore");
+        const { doc, getDoc } = firestoreModule;
 
-  // Generate some dummy calendar events
-  const generateDummyEvents = () => {
-    const today = new Date();
-    const events = [];
-    
-    // Add some sample events
-    for (let i = 0; i < 10; i++) {
-      const eventDate = new Date(today);
-      eventDate.setDate(today.getDate() + (Math.random() * 30 - 15)); // Random dates ±15 days
-      
-      const eventTypes = [
-        { title: 'Team Meeting', color: 'blue' },
-        { title: 'Doctor Appointment', color: 'red' },
-        { title: 'Lunch with Sarah', color: 'green' },
-        { title: 'Gym Session', color: 'purple' },
-        { title: 'Project Deadline', color: 'orange' },
-        { title: 'Date Night', color: 'pink' },
-        { title: 'Family Dinner', color: 'yellow' },
-        { title: 'Conference Call', color: 'indigo' }
-      ];
-      
-      const randomEvent = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-      
-      events.push({
-        id: `event_${i}`,
-        title: randomEvent.title,
-        date: eventDate.toISOString().split('T')[0], // YYYY-MM-DD format
-        time: `${Math.floor(Math.random() * 12) + 1}:${Math.random() > 0.5 ? '00' : '30'} ${Math.random() > 0.5 ? 'AM' : 'PM'}`,
-        color: randomEvent.color,
-        description: `This is a sample event: ${randomEvent.title}`,
-        isAllDay: Math.random() > 0.7,
-        reminders: ['15min', '1hour'],
-        createdAt: new Date().toISOString(),
-      });
-    }
-    
-    return events.sort((a, b) => new Date(a.date) - new Date(b.date));
-  };
+        const userRef = doc(db, "users", authUser.uid);
+        const snapshot = await getDoc(userRef);
 
-  // Dummy functions for future calendar functionality
-  const addEvent = async (eventData) => {
-    console.log('Adding event (dummy):', eventData);
-    // TODO: Replace with Firebase Firestore call
-    const newEvent = {
-      ...eventData,
-      id: `event_${Date.now()}`,
-      createdAt: new Date().toISOString(),
+        if (snapshot.exists()) {
+          setUser(snapshot.data());
+          console.log("Fetched user doc:", snapshot.data());
+        } else {
+          console.warn("No user document found for:", authUser.uid);
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("Error fetching user document:", error);
+      } finally {
+        setLoading(false);
+      }
     };
-    
-    setUser(prev => ({
-      ...prev,
-      events: [...(prev?.events || []), newEvent].sort((a, b) => new Date(a.date) - new Date(b.date))
-    }));
-    
-    return newEvent;
+
+    fetchUserDoc();
+  }, [authUser, db]);
+
+  // --- event & profile functions ---
+  const addEvent = async (eventData) => {
+    console.log('TODO: Add event to Firestore', eventData);
+    // Firestore logic goes here later
   };
 
   const updateEvent = async (eventId, eventData) => {
-    console.log('Updating event (dummy):', eventId, eventData);
-    // TODO: Replace with Firebase Firestore call
-    setUser(prev => ({
-      ...prev,
-      events: prev?.events?.map(event => 
-        event.id === eventId 
-          ? { ...event, ...eventData, updatedAt: new Date().toISOString() }
-          : event
-      ) || []
-    }));
+    console.log('TODO: Update event in Firestore', eventId, eventData);
   };
 
   const deleteEvent = async (eventId) => {
-    console.log('Deleting event (dummy):', eventId);
-    // TODO: Replace with Firebase Firestore call
-    setUser(prev => ({
-      ...prev,
-      events: prev?.events?.filter(event => event.id !== eventId) || []
-    }));
+    console.log('TODO: Delete event in Firestore', eventId);
   };
 
   const updateUserProfile = async (profileData) => {
-    console.log('Updating user profile (dummy):', profileData);
-    // TODO: Replace with Firebase Firestore call
-    setUser(prev => ({
-      ...prev,
-      ...profileData,
-      updatedAt: new Date().toISOString(),
-    }));
+    console.log('TODO: Update user profile in Firestore', profileData);
   };
 
   const value = {
     user,
     loading,
-    
-    // Calendar functions
     addEvent,
     updateEvent,
     deleteEvent,
-    
-    // User functions
     updateUserProfile,
-    
-    // Helper functions
-    getEventsForDate: (date) => {
-      return user?.events?.filter(event => event.date === date) || [];
-    },
-    
-    getEventsForMonth: (year, month) => {
-      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-      return user?.events?.filter(event => event.date.startsWith(monthStr)) || [];
-    },
   };
 
   return (

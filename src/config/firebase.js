@@ -3,13 +3,13 @@ import { initializeApp } from 'firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBMxp17cbYykwyv0hqbI_TUHzKo8wTkJ24",
-  authDomain: "calendar-connection-v2.firebaseapp.com",
-  projectId: "calendar-connection-v2",
-  storageBucket: "calendar-connection-v2.firebasestorage.app",
-  messagingSenderId: "356362430059",
-  appId: "1:356362430059:web:781b123c4f2c73adc4332e",
-  measurementId: "G-P3EVZZTNGC"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: "calendarconnectionv2.firebaseapp.com",
+  projectId: "calendarconnectionv2",
+  storageBucket: "calendarconnectionv2.firebasestorage.app",
+  messagingSenderId: "569488542917",
+  appId: "1:569488542917:web:8dc010ea8924e1d8a5b4ac",
+  measurementId: "G-4PHYJ1TPJM"
 };
 
 // Initialize Firebase
