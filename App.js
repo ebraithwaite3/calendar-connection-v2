@@ -1,20 +1,55 @@
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { CustomThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { DataProvider } from './src/contexts/DataContext';
+import LoginScreen from './src/screens/LoginScreen';
+import WelcomeScreen from './src/screens/WelcomeScreen';
+import Header from './src/components/Header';
 
+// Main app component that uses all contexts
+const MainApp = () => {
+  const { user, logout } = useAuth();
+  const { isDarkMode } = useTheme();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  if (user) {
+    return (
+      <>
+        <Header 
+          onProfilePress={() => console.log('Profile pressed')}
+          onLogout={handleLogout}
+        />
+        <WelcomeScreen />
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <LoginScreen />
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+    </>
+  );
+};
+
+// Root app component with all providers
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <CustomThemeProvider>
+      <AuthProvider>
+        <DataProvider>
+          <MainApp />
+        </DataProvider>
+      </AuthProvider>
+    </CustomThemeProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
