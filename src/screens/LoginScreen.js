@@ -9,15 +9,26 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
   const { login, signup } = useAuth();
+
+  const clearLocalStorage = async () => {
+    try {
+      await AsyncStorage.clear();
+      console.log('Local storage cleared');
+    } catch (error) {
+      console.error('Error clearing local storage:', error);
+    }
+  };
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -37,7 +48,7 @@ const LoginScreen = () => {
         await login(email, password);
         console.log('User signed in successfully');
       } else {
-        await signup(email, password);
+        await signup(email, password, username);
         console.log('User created successfully');
       }
       // No need to call onAuthSuccess - the AuthContext will handle the state change
@@ -94,6 +105,17 @@ const LoginScreen = () => {
             autoCapitalize="none"
             editable={!loading}
           />
+
+          {!isLogin && (
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              editable={!loading}
+            />
+          )}
           
           <TextInput
             style={styles.input}
@@ -134,6 +156,17 @@ const LoginScreen = () => {
               {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
             </Text>
           </TouchableOpacity>
+          {/* Button to clear Async */}
+          <View style={{ height: 24 }} />
+          <TouchableOpacity
+            style={styles.switchButton}
+            onPress={clearLocalStorage}
+            disabled={loading}
+          >
+            <Text style={[styles.switchText, loading && styles.disabledText]}>
+              Clear Local Storage
+            </Text>
+          </TouchableOpacity> 
         </View>
       </View>
     </SafeAreaView>

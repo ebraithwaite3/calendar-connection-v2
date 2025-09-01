@@ -1,4 +1,4 @@
-// src/screens/GroupScreen.js
+// src/screens/AddScreen.js
 import React from 'react';
 import {
   View,
@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 
-const GroupScreen = ({ navigation }) => {
+const AddScreen = ({ navigation }) => {
   const { theme, getSpacing, getTypography } = useTheme();
 
   const styles = StyleSheet.create({
@@ -31,50 +31,32 @@ const GroupScreen = ({ navigation }) => {
       textAlign: 'center',
       marginBottom: getSpacing.xl,
     },
-    buttonContainer: {
-      width: '100%',
-      gap: getSpacing.md,
-    },
-    button: {
+    backButton: {
       backgroundColor: theme.primary,
-      padding: getSpacing.md,
+      paddingHorizontal: getSpacing.lg,
+      paddingVertical: getSpacing.md,
       borderRadius: 12,
-      alignItems: 'center',
     },
-    secondaryButton: {
-      backgroundColor: theme.surface || theme.card,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    buttonText: {
+    backButtonText: {
       fontSize: getTypography.button.fontSize,
       fontWeight: getTypography.button.fontWeight,
       color: theme.text.inverse,
-    },
-    secondaryButtonText: {
-      color: theme.text.primary,
     },
   });
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Groups</Text>
-      <Text style={styles.subtitle}>Group calendar sharing coming soon...</Text>
+      <Text style={styles.title}>Add Screen</Text>
+      <Text style={styles.subtitle}>Add screen coming soon...</Text>
       
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={styles.button}
-          onPress={() => navigation.navigate('GroupDetails', { groupId: 'family' })}
-        >
-          <Text style={styles.buttonText}>View Sample Group</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => navigation.navigate('AddScreen')}>
-  <Text>Go to Add Screen</Text>
-</TouchableOpacity>
-      </View>
+      <TouchableOpacity 
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+      >
+        <Text style={styles.backButtonText}>← Back</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
-export default GroupScreen;
+export default AddScreen;

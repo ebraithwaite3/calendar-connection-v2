@@ -1,6 +1,7 @@
 // AuthContext.js
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { initializeAuth, initializeFirestore } from '../config/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AuthContext = createContext();
 
@@ -11,6 +12,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [auth, setAuth] = useState(null);
   const [db, setDb] = useState(null);
+  console.log("DB STATE:", db);
 
   useEffect(() => {
     const setupAuth = async () => {
@@ -47,7 +49,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Helper function to create user document in Firestore
-  const createUserDocument = async (user, additionalData = {}) => {
+  const createUserDocument = async (user, username, additionalData = {}) => {
     if (!user || !db) return;
     
     try {
@@ -64,8 +66,7 @@ export const AuthProvider = ({ children }) => {
         const userData = {
           userId: user.uid,
           email: user.email,
-          username: generateUsernameFromEmail(user.email),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          username: username,
           groups: [],
           calendars: [],
           subscriptions: [],
@@ -73,11 +74,12 @@ export const AuthProvider = ({ children }) => {
           updatedAt: now,
           isActive: true,
           // Additional fields for app functionality
-          displayName: user.displayName || generateUsernameFromEmail(user.email),
           profilePicture: user.photoURL || null,
           preferences: {
             theme: 'system',
-            defaultView: 'month',
+            defaultLoadingPage: 'Calendar',
+            defaultCalendarView: 'month',
+            defaultTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             weekStartsOn: 'sunday',
             notifications: true,
           },
@@ -101,13 +103,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Helper function to generate username from email
-  const generateUsernameFromEmail = (email) => {
-    if (!email) return 'User';
-    const name = email.split('@')[0];
-    return name.charAt(0).toUpperCase() + name.slice(1).replace(/[._]/g, ' ');
-  };
-
   const login = async (email, password) => {
     if (!auth) throw new Error('Auth not initialized');
     const authModule = await import('firebase/auth');
@@ -119,13 +114,16 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
-  const signup = async (email, password) => {
+  const signup = async (email, password, username) => {
     if (!auth) throw new Error('Auth not initialized');
     const authModule = await import('firebase/auth');
     const result = await authModule.createUserWithEmailAndPassword(auth, email, password);
     
     // Create user document on signup
-    await createUserDocument(result.user);
+    await createUserDocument(result.user, username);
+
+    // Set default loading page in AsyncStorage
+    await AsyncStorage.setItem('defaultLoadingPage', 'Calendar');
     
     return result;
   };

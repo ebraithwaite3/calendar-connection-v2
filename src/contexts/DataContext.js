@@ -1,6 +1,7 @@
-// src/contexts/DataContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useAuth } from './AuthContext';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { DateTime } from 'luxon';
 
 const DataContext = createContext();
 
@@ -13,41 +14,60 @@ export const useData = () => {
 };
 
 export const DataProvider = ({ children }) => {
-  const { user: authUser, db } = useAuth();   // get Firestore instance from AuthContext
+  const { user: authUser, db } = useAuth(); // get Firestore instance from AuthContext
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [currentDate, setCurrentDate] = useState(DateTime.local().toISODate());
+
+  console.log("LOADING STATE:", loading, "Current Date:", currentDate, "User:", user ? user.email || user.username : 'No user');
 
   useEffect(() => {
-    const fetchUserDoc = async () => {
-      if (!authUser || !db) {
-        setUser(null);
-        return;
-      }
-
+    // Set up a real-time listener for the user's document
+    let unsubscribe = null;
+    
+    if (authUser && db) {
       setLoading(true);
-      try {
-        const firestoreModule = await import("firebase/firestore");
-        const { doc, getDoc } = firestoreModule;
-
-        const userRef = doc(db, "users", authUser.uid);
-        const snapshot = await getDoc(userRef);
-
+      const userRef = doc(db, 'users', authUser.uid);
+      
+      unsubscribe = onSnapshot(userRef, (snapshot) => {
         if (snapshot.exists()) {
-          setUser(snapshot.data());
-          console.log("Fetched user doc:", snapshot.data());
+          const userData = snapshot.data();
+          setUser(userData);
+          console.log("Real-time update: User doc fetched and set.");
         } else {
           console.warn("No user document found for:", authUser.uid);
           setUser(null);
         }
-      } catch (error) {
-        console.error("Error fetching user document:", error);
-      } finally {
         setLoading(false);
+      }, (error) => {
+        console.error("Error listening to user document:", error);
+        setLoading(false);
+      });
+    } else {
+      setUser(null);
+      setLoading(true);
+    }
+    
+    // Cleanup function to detach the listener when the component unmounts
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
       }
     };
-
-    fetchUserDoc();
   }, [authUser, db]);
+
+  // Helper function to get/set an update date to current date
+  const setWorkingDate = (date) => {
+    const isoDate = DateTime.fromJSDate(date).toISODate();
+    setCurrentDate(isoDate);
+    console.log("Set current date to:", isoDate);
+  };
+
+  // TO DO: Could be used to allow users to select their timezone, even if they're not in that timezone
+  // Helper function to get today in the users timezone
+  // const getToday = () => {
+  //   return DateTime.local().toISODate();
+  // };
 
   // --- event & profile functions ---
   const addEvent = async (eventData) => {
@@ -67,14 +87,22 @@ export const DataProvider = ({ children }) => {
     console.log('TODO: Update user profile in Firestore', profileData);
   };
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     loading,
+    currentDate,
+    setWorkingDate,
+    //getToday,
+    calendarsInfo: user?.calendars || [],
+    groupsInfo: user?.groups || [],
+    preferences: user?.preferences || {},
+    myUsername: user?.username || '',
+    myUserId: user?.userId || '',
     addEvent,
     updateEvent,
     deleteEvent,
     updateUserProfile,
-  };
+  }), [user, loading, currentDate]);
 
   return (
     <DataContext.Provider value={value}>
