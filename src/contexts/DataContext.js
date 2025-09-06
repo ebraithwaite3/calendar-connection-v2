@@ -391,48 +391,6 @@ export const DataProvider = ({ children }) => {
     return calendars.filter(cal => cal.type === type);
   }, [calendars]);
 
-
-  // ===== LEGACY COMPATIBILITY (DEPRECATED - will be removed) =====
-const refreshCalendars = useCallback(async () => {
-  console.warn("⚠️ refreshCalendars is deprecated - using real-time subscriptions");
-  // No-op since we now use real-time subscriptions
-}, []);
-
-const refreshGroups = useCallback(async () => {
-  console.warn("⚠️ refreshGroups is deprecated - using real-time subscriptions");
-  // No-op since we now use real-time subscriptions
-}, []);
-
-const refreshAssignments = useCallback(async () => {
-  console.warn("⚠️ refreshAssignments is deprecated - using real-time subscriptions");
-  // No-op since we now use real-time subscriptions
-}, []);
-
-const refreshMessages = useCallback(async () => {
-  console.warn("⚠️ refreshMessages is deprecated - using real-time subscriptions");
-  // No-op since we now use real-time subscriptions
-}, []);
-
-const loadCalendars = useCallback(async () => {
-  console.warn("⚠️ loadCalendars is deprecated - using real-time subscriptions");
-  // No-op since we now use real-time subscriptions
-}, []);
-
-const loadGroups = useCallback(async () => {
-  console.warn("⚠️ loadGroups is deprecated - using real-time subscriptions");
-  // No-op since we now use real-time subscriptions
-}, []);
-
-const loadAssignments = useCallback(async () => {
-  console.warn("⚠️ loadAssignments is deprecated - using real-time subscriptions");
-  // No-op since we now use real-time subscriptions
-}, []);
-
-const loadMessages = useCallback(async () => {
-  console.warn("⚠️ loadMessages is deprecated - using real-time subscriptions");
-  // No-op since we now use real-time subscriptions
-}, []);
-
 const unreadMessagesCount = useMemo(() => {
   return messages.messages?.filter(m => !m.read).length || 0;
 }, [messages]);
@@ -465,16 +423,6 @@ const messagesCount = useMemo(() => {
     assignmentsLoading,
     messagesLoading,
 
-    // Legacy actions (deprecated - will be removed)
-    refreshCalendars,
-    refreshGroups,
-    refreshAssignments,
-    refreshMessages,
-    loadCalendars,
-    loadGroups,
-    loadAssignments,
-    loadMessages,
-    
     // Computed properties
     isDataLoaded: !loading && !!user,
     hasCalendars: calendars.length > 0,
@@ -513,14 +461,6 @@ const messagesCount = useMemo(() => {
     getCalendarsByType,
     removeCalendar,
     syncCalendar,
-    refreshCalendars,
-    refreshGroups,
-    refreshAssignments,
-    refreshMessages,
-    loadCalendars,
-    loadGroups,
-    loadAssignments,
-    loadMessages,
     unreadMessagesCount,
     messagesCount,
   ]);

@@ -17,7 +17,7 @@ import { arrayUnion } from "firebase/firestore";
 
 export const useGroupActions = () => {
   const { user: authUser } = useAuth();
-  const { user, myUsername, myUserId, loadGroups } = useData();
+  const { user, myUsername, myUserId } = useData();
   const { createAssignmentDoc } = useAssignmentActions();
 
   const uuidv4 = () => Crypto.randomUUID();
@@ -171,9 +171,6 @@ export const useGroupActions = () => {
         const updatedGroups = [...(user.groups || []), groupRef];
         await updateDocument("users", authUser.uid, { groups: updatedGroups });
 
-        // Auto-refresh groups
-        await loadGroups(updatedGroups);
-
         console.log("✅ Successfully created group:", groupId);
         return newGroup;
       } catch (error) {
@@ -186,7 +183,6 @@ export const useGroupActions = () => {
       myUserId,
       myUsername,
       user?.groups,
-      loadGroups,
       createAssignmentDoc,
     ]
   );
@@ -346,6 +342,7 @@ export const useGroupActions = () => {
                 {
                   userId: myUserId,
                   username: myUsername,
+                  groupName: groupToJoin.name,
                   screenForNavigation: {
                     screen: "Group",
                     params: { groupId: groupToJoin.groupId },
@@ -361,9 +358,6 @@ export const useGroupActions = () => {
           );
         }
 
-        // Auto-refresh groups
-        await loadGroups(updatedGroups);
-
         console.log("✅ Successfully joined group:", groupToJoin.groupId);
         return groupToJoin;
       } catch (error) {
@@ -371,7 +365,7 @@ export const useGroupActions = () => {
         throw error;
       }
     },
-    [authUser, myUserId, myUsername, user?.groups, user?.calendars, loadGroups]
+    [authUser, myUserId, myUsername, user?.groups, user?.calendars]
   );
 
   const leaveGroup = useCallback(
@@ -555,6 +549,7 @@ export const useGroupActions = () => {
                 {
                   userId: myUserId,
                   username: myUsername,
+                  groupName: group.name,
                   screenForNavigation: {
                     screen: "Group",
                     params: { groupId: groupId },
@@ -581,6 +576,7 @@ export const useGroupActions = () => {
             {
                 userId: myUserId,
                 username: myUsername,
+                groupName: group.name,
                 screenForNavigation: {
                   screen: "Group",
                   params: { groupId: groupId },
@@ -593,16 +589,13 @@ export const useGroupActions = () => {
           );
         }
 
-        // Auto-refresh groups
-        await loadGroups(updatedGroups);
-
         console.log("✅ Successfully left group:", groupId);
       } catch (error) {
         console.error("❌ Error leaving group:", error);
         throw error;
       }
     },
-    [authUser, user?.groups, loadGroups]
+    [authUser, user?.groups]
   );
 
   const rejoinGroup = useCallback(
@@ -842,6 +835,7 @@ export const useGroupActions = () => {
                 {
                     userId: myUserId,
                     username: myUsername,
+                    groupName: group.name,
                     screenForNavigation: {
                       screen: "Group",
                       params: { groupId: groupId },
@@ -865,6 +859,7 @@ export const useGroupActions = () => {
             {
                 userId: myUserId,
                 username: myUsername,
+                groupName: group.name,
                 screenForNavigation: {
                   screen: "Group",
                   params: { groupId: groupId },
@@ -877,11 +872,6 @@ export const useGroupActions = () => {
           );
         }
 
-        // Auto-refresh groups (only if the current user is the one being added back)
-        if (isAddingSelf) {
-          await loadGroups(updatedGroups);
-        }
-
         console.log("✅ Successfully rejoined group:", groupId);
         return group;
       } catch (error) {
@@ -889,7 +879,7 @@ export const useGroupActions = () => {
         throw error;
       }
     },
-    [authUser, user?.groups, loadGroups, addUserToCalendar]
+    [authUser, user?.groups, addUserToCalendar]
   );
 
   const updateGroupRole = useCallback(
@@ -1011,6 +1001,7 @@ export const useGroupActions = () => {
               {
                 userId: myUserId,
                 username: myUsername,
+                groupName: group.name,
                 screenForNavigation: {
                   screen: "Group",
                   params: { groupId: groupId },
@@ -1034,6 +1025,7 @@ export const useGroupActions = () => {
               {
                 userId: myUserId,
                 username: myUsername,
+                groupName: group.name,
                 screenForNavigation: {
                   screen: "Group",
                   params: { groupId: groupId },
@@ -1052,9 +1044,6 @@ export const useGroupActions = () => {
           );
         }
 
-        // Auto-refresh groups
-        await loadGroups(updatedGroups);
-
         console.log("✅ Successfully updated group role");
         return group;
       } catch (error) {
@@ -1062,7 +1051,7 @@ export const useGroupActions = () => {
         throw error;
       }
     },
-    [authUser, user?.groups, loadGroups]
+    [authUser, user?.groups]
   );
 
   const deleteGroup = useCallback(
@@ -1222,6 +1211,7 @@ export const useGroupActions = () => {
                   {
                     userId: myUserId,
                     username: myUsername,
+                    groupName: group.name,
                     screenForNavigation: {
                       screen: "Group",
                       params: { groupId: groupId },
@@ -1264,7 +1254,7 @@ export const useGroupActions = () => {
         throw error;
       }
     },
-    [authUser, myUserId, myUsername, user?.groups, loadGroups]
+    [authUser, myUserId, myUsername, user?.groups]
   );
 
   const removeCalendarFromGroup = useCallback(
@@ -1428,6 +1418,7 @@ export const useGroupActions = () => {
                   {
                     userId: myUserId,
                     username: myUsername,
+                    groupName: group.name,
                     screenForNavigation: {
                       screen: "Group",
                       params: { groupId: groupId },
@@ -1458,14 +1449,6 @@ export const useGroupActions = () => {
           }
         }
 
-        // STEP 4: Auto-refresh groups (non-critical)
-        try {
-          await loadGroups(user.groups || []);
-          console.log("✅ Successfully refreshed groups list");
-        } catch (error) {
-          console.error("❌ Error refreshing groups list:", error);
-        }
-
         console.log(
           `✅ Successfully completed calendar removal from group ${groupId}: ${calendarsToRemove
             .map((c) => c.calendarId)
@@ -1485,7 +1468,7 @@ export const useGroupActions = () => {
         throw error;
       }
     },
-    [authUser, myUserId, myUsername, user?.groups, loadGroups]
+    [authUser, myUserId, myUsername, user?.groups]
   );
 
   const addCalendarsToGroup = useCallback(
@@ -1725,6 +1708,7 @@ export const useGroupActions = () => {
                   {
                     userId: myUserId,
                     username: myUsername,
+                    groupName: group.name,
                     screenForNavigation: {
                       screen: "Group",
                       params: { groupId: groupId },
@@ -1779,7 +1763,6 @@ export const useGroupActions = () => {
       myUserId,
       myUsername,
       user?.groups,
-      loadGroups,
       addUserToCalendar,
     ]
   );

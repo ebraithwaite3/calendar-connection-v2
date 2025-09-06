@@ -6,6 +6,9 @@ import { DataProvider } from './src/contexts/DataContext';
 import LoginScreen from './src/screens/LoginScreen';
 import MainNavigator from './src/navigation/MainNavigator';
 
+// 1. Import GestureHandlerRootView
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 // Main app component that uses all contexts
 const MainApp = () => {
   const { user, logout } = useAuth();
@@ -42,7 +45,10 @@ export default function App() {
     <CustomThemeProvider>
       <AuthProvider>
         <DataProvider>
-          <MainApp />
+          {/* 2. Wrap your entire application content with GestureHandlerRootView */}
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <MainApp />
+          </GestureHandlerRootView>
         </DataProvider>
       </AuthProvider>
     </CustomThemeProvider>

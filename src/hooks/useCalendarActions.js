@@ -13,7 +13,7 @@ import { updateDocument, getDocument } from '../services/firestoreService';
 
 export const useCalendarActions = () => {
   const { user: authUser } = useAuth();
-  const { user, refreshCalendars, loadCalendars } = useData();
+  const { user } = useData();
 
   const addCalendar = useCallback(async (calendarData) => {
     try {
@@ -43,27 +43,8 @@ export const useCalendarActions = () => {
         const syncResult = await syncCalendarById(calendarRef.calendarId);
         console.log("✅ Auto-sync completed:", syncResult);
         
-        // Get fresh user data and refresh calendars
-        console.log("🔄 Refreshing calendars after auto-sync...");
-        const freshUserDoc = await getDocument('users', authUser.uid);
-        if (freshUserDoc?.calendars) {
-          console.log(`📊 Fresh user doc has ${freshUserDoc.calendars.length} calendars`);
-          await loadCalendars(freshUserDoc.calendars);
-        } else {
-          // Fallback to regular refresh
-          await refreshCalendars();
-        }
-        console.log("✅ Calendar data refreshed after auto-sync");
-        
       } catch (syncError) {
         console.warn("⚠️ Calendar added but sync failed:", syncError);
-        // Still refresh to show the calendar
-        const freshUserDoc = await getDocument('users', authUser.uid);
-        if (freshUserDoc?.calendars) {
-          await loadCalendars(freshUserDoc.calendars);
-        } else {
-          await refreshCalendars();
-        }
       }
       
       return calendarRef;
@@ -71,7 +52,7 @@ export const useCalendarActions = () => {
       console.error("❌ Error adding calendar:", error);
       throw error;
     }
-  }, [authUser, user?.calendars, refreshCalendars, loadCalendars]);
+  }, [authUser, user?.calendars]);
 
   const removeCalendar = useCallback(async (calendarId) => {
     try {
@@ -92,16 +73,12 @@ export const useCalendarActions = () => {
       const result = await syncCalendarById(calendarId);
       console.log("✅ Calendar synced:", result);
       
-      // Refresh calendar data after sync
-      console.log("🔄 Refreshing calendars after manual sync...");
-      await refreshCalendars();
-      
       return result;
     } catch (error) {
       console.error("❌ Error syncing calendar:", error);
       throw error;
     }
-  }, [refreshCalendars]);
+  }, []);
 
   return {
     addCalendar,

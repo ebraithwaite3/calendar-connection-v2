@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { 
   View, 
   Text, 
@@ -12,9 +12,16 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useData } from "../contexts/DataContext";
 import GroupCard from "../components/cards/GroupCard";
 
-const GroupScreen = ({ navigation }) => {
+const GroupScreen = ({ navigation, route }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
   const { groups, user } = useData();
+
+  // Log params whenever they change
+  useEffect(() => {
+    if (route.params) {
+      console.log('GroupScreen received params:', route.params);
+    }
+  }, [route.params]);
 
   const handleCreateGroup = () => {
     navigation.navigate('CreateGroup');

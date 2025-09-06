@@ -18,6 +18,7 @@ export const addMessageToUser = async (receivingUserId, sendingUserInfo, message
       timestamp: DateTime.now().toISO(),
       read: false,
       navigationInfo: sendingUserInfo.screenForNavigation || null,
+      groupName: sendingUserInfo.groupName || null,
     };
 
     await updateDocument("messages", receivingUserId, {

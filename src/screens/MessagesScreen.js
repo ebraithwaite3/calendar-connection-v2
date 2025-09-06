@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,15 +12,25 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useData } from '../contexts/DataContext';
+import { useMessageActions } from '../hooks/useMessageActions';
 import { DateTime } from 'luxon';
+import { Swipeable } from 'react-native-gesture-handler';
+import MessageDetailModal from '../components/modals/MessageDetailModal';
 
 const MessagesScreen = ({ navigation }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
-  const { messages, messagesLoading } = useData();
+  const { messages, messagesLoading, user, refreshMessages } = useData();
+  const { markMessagesAsRead, markMessagesAsUnread, deleteMessages } = useMessageActions();
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState(new Set());
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  // Get messages array from the messages object
+  // CORRECT WAY: Use a ref object to hold refs for each row
+  const rowRefs = useRef({});
+  const [openRowId, setOpenRowId] = useState(null);
+
   const messagesList = messages?.messages || [];
   const unreadCount = messagesList.filter(m => !m.read).length;
 
@@ -66,17 +76,78 @@ const MessagesScreen = ({ navigation }) => {
     setSelectedMessages(newSelected);
   };
 
-  const handleMarkAsRead = (messageId) => {
-    console.log('Mark message as read:', messageId);
-    // TODO: Implement markMessageAsRead hook
+  const handleMarkAsRead = async (messageId) => {
+    try {
+      setActionLoading(true);
+      await markMessagesAsRead(user?.userId || user?.uid, [messageId]);
+      
+      // Close the swipe row
+      if (rowRefs.current[messageId]) {
+        rowRefs.current[messageId].close();
+      }
+      
+      console.log('Message marked as read:', messageId);
+    } catch (error) {
+      console.error('Failed to mark message as read:', error);
+      Alert.alert('Error', 'Failed to mark message as read. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleMarkAllAsRead = () => {
-    console.log('Mark all messages as read');
-    // TODO: Implement markAllMessagesAsRead hook
+  const handleMarkAsUnread = async (messageId) => {
+    try {
+      setActionLoading(true);
+      await markMessagesAsUnread(user?.userId || user?.uid, [messageId]);
+      
+      // Close the swipe row
+      if (rowRefs.current[messageId]) {
+        rowRefs.current[messageId].close();
+      }
+      
+      console.log('Message marked as unread:', messageId);
+    } catch (error) {
+      console.error('Failed to mark message as unread:', error);
+      Alert.alert('Error', 'Failed to mark message as unread. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleDeleteMessage = (messageId) => {
+  const handleMarkAllAsRead = async () => {
+    const unreadMessageIds = messagesList.filter(m => !m.read).map(m => m.messageId);
+    
+    if (unreadMessageIds.length === 0) {
+      Alert.alert('Info', 'All messages are already marked as read.');
+      return;
+    }
+
+    Alert.alert(
+      'Mark All as Read',
+      `Are you sure you want to mark ${unreadMessageIds.length} message(s) as read?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark All',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              await markMessagesAsRead(user?.userId || user?.uid, unreadMessageIds);
+              console.log('All messages marked as read');
+            } catch (error) {
+              console.error('Failed to mark all messages as read:', error);
+              Alert.alert('Error', 'Failed to mark all messages as read. Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteMessage = async (messageId) => {
     Alert.alert(
       'Delete Message',
       'Are you sure you want to delete this message?',
@@ -85,36 +156,65 @@ const MessagesScreen = ({ navigation }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            console.log('Delete message:', messageId);
-            // TODO: Implement deleteMessage hook
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              await deleteMessages(user?.userId || user?.uid, [messageId]);
+              
+              // Close the swipe row
+              if (rowRefs.current[messageId]) {
+                rowRefs.current[messageId].close();
+              }
+              
+              console.log('Message deleted:', messageId);
+            } catch (error) {
+              console.error('Failed to delete message:', error);
+              Alert.alert('Error', 'Failed to delete message. Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
           },
         },
       ]
     );
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
+    const selectedIds = Array.from(selectedMessages);
+    
     Alert.alert(
       'Delete Messages',
-      `Are you sure you want to delete ${selectedMessages.size} message(s)?`,
+      `Are you sure you want to delete ${selectedIds.length} message(s)?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            console.log('Delete selected messages:', Array.from(selectedMessages));
-            setSelectedMessages(new Set());
-            setIsEditMode(false);
-            // TODO: Implement deleteMessages hook
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              await deleteMessages(user?.userId || user?.uid, selectedIds);
+              
+              // Reset selection and edit mode
+              setSelectedMessages(new Set());
+              setIsEditMode(false);
+              
+              console.log('Selected messages deleted:', selectedIds);
+            } catch (error) {
+              console.error('Failed to delete selected messages:', error);
+              Alert.alert('Error', 'Failed to delete messages. Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
           },
         },
       ]
     );
   };
 
-  const handleDeleteAll = () => {
+  const handleDeleteAll = async () => {
+    const allMessageIds = messagesList.map(m => m.messageId);
+    
     Alert.alert(
       'Delete All Messages',
       'Are you sure you want to delete ALL messages? This action cannot be undone.',
@@ -123,11 +223,22 @@ const MessagesScreen = ({ navigation }) => {
         {
           text: 'Delete All',
           style: 'destructive',
-          onPress: () => {
-            console.log('Delete all messages');
-            setSelectedMessages(new Set());
-            setIsEditMode(false);
-            // TODO: Implement deleteAllMessages hook
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              await deleteMessages(user?.userId || user?.uid, allMessageIds);
+              
+              // Reset selection and edit mode
+              setSelectedMessages(new Set());
+              setIsEditMode(false);
+              
+              console.log('All messages deleted');
+            } catch (error) {
+              console.error('Failed to delete all messages:', error);
+              Alert.alert('Error', 'Failed to delete all messages. Please try again.');
+            } finally {
+              setActionLoading(false);
+            }
           },
         },
       ]
@@ -143,64 +254,142 @@ const MessagesScreen = ({ navigation }) => {
     setSelectedMessages(new Set());
   };
 
+  // Function to close the previously open row
+  const closeOtherRows = (rowId) => {
+    if (openRowId && openRowId !== rowId) {
+      const prevRow = rowRefs.current[openRowId];
+      if (prevRow) {
+        prevRow.close();
+      }
+    }
+    setOpenRowId(rowId);
+  };
+
+  // NEW: Handle opening message modal and auto-mark as read
+  const handleOpenMessage = async (message) => {
+    // If not in edit mode, open the modal
+    if (!isEditMode) {
+      setSelectedMessage(message);
+      setIsModalVisible(true);
+      
+      // Auto-mark as read if it's unread
+      if (!message.read) {
+        try {
+          await markMessagesAsRead(user?.userId || user?.uid, [message.messageId]);
+          
+          console.log('Message auto-marked as read on open:', message.messageId);
+        } catch (error) {
+          console.error('Failed to auto-mark message as read:', error);
+          // Don't show error to user for this background action
+        }
+      }
+    } else {
+      // In edit mode, toggle selection
+      toggleMessageSelection(message.messageId);
+    }
+  };
+
+  const renderSwipeLeftActions = (item) => (
+    <View style={styles.swipeActionContainerLeft}>
+      <TouchableOpacity
+        style={[styles.swipeAction, styles.deleteSwipeAction]}
+        onPress={() => handleDeleteMessage(item.messageId)}
+        disabled={actionLoading}
+      >
+        <Ionicons name="trash-outline" size={24} color="white" />
+        <Text style={styles.swipeActionText}>Delete</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderSwipeRightActions = (item) => (
+    <View style={styles.swipeActionContainerRight}>
+      <TouchableOpacity
+        style={[styles.swipeAction, styles.readSwipeAction]}
+        onPress={() => {
+          if (!item.read) {
+            handleMarkAsRead(item.messageId);
+          } else {
+            handleMarkAsUnread(item.messageId);
+          }
+        }}
+        disabled={actionLoading}
+      >
+        <Ionicons 
+          name={item.read ? "mail-unread-outline" : "mail-open-outline"} 
+          size={24} 
+          color="white" 
+        />
+        <Text style={styles.swipeActionText}>{item.read ? 'Unread' : 'Read'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderMessage = ({ item }) => {
     const isSelected = selectedMessages.has(item.messageId);
     const messageColor = getMessageColor(item.content);
     const iconName = getMessageIcon(item.content);
 
-    return (
-      <TouchableOpacity
-        style={[
-          styles.messageCard,
-          !item.read && styles.unreadMessage,
-          isSelected && styles.selectedMessage,
-        ]}
-        onPress={() => {
-          if (isEditMode) {
-            toggleMessageSelection(item.messageId);
-          } else if (!item.read) {
-            handleMarkAsRead(item.messageId);
-          }
-        }}
-        onLongPress={() => {
-          if (!isEditMode) {
-            setIsEditMode(true);
-            toggleMessageSelection(item.messageId);
-          }
-        }}
-      >
-        <View style={styles.messageHeader}>
-          <View style={styles.messageLeft}>
-            <View style={[styles.iconContainer, { backgroundColor: messageColor + '20' }]}>
-              <Ionicons name={iconName} size={16} color={messageColor} />
-            </View>
-            <View style={styles.messageInfo}>
-              <Text style={styles.senderName}>{item.senderName}</Text>
-              <Text style={styles.timestamp}>{formatTimestamp(item.timestamp)}</Text>
-            </View>
-          </View>
-          <View style={styles.messageRight}>
-            {!item.read && <View style={styles.unreadDot} />}
-            {isEditMode && (
-              <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                {isSelected && <Ionicons name="checkmark" size={14} color="white" />}
+    const MessageCard = (
+      <View style={[
+        styles.messageCard,
+        !item.read && styles.unreadMessage,
+        isSelected && styles.selectedMessage,
+      ]}>
+        <TouchableOpacity
+          style={styles.messageContentWrapper}
+          onPress={() => handleOpenMessage(item)}
+          onLongPress={() => {
+            if (!isEditMode) {
+              setIsEditMode(true);
+              toggleMessageSelection(item.messageId);
+            }
+          }}
+          disabled={actionLoading}
+        >
+          <View style={styles.messageHeader}>
+            <View style={styles.messageLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: messageColor + '20' }]}>
+                <Ionicons name={iconName} size={16} color={messageColor} />
               </View>
-            )}
-            {!isEditMode && (
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDeleteMessage(item.messageId)}
-              >
-                <Ionicons name="trash-outline" size={16} color={theme.text.tertiary} />
-              </TouchableOpacity>
-            )}
+              <View style={styles.messageInfo}>
+                <Text style={[styles.senderName, !item.read && styles.unreadText]}>{item.groupName}</Text>
+                <Text style={styles.timestamp}>{item.senderName}-{formatTimestamp(item.timestamp)}</Text>
+              </View>
+            </View>
+            <View style={styles.messageRight}>
+              {!item.read && <View style={styles.unreadDot} />}
+              {isEditMode && (
+                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                  {isSelected && <Ionicons name="checkmark" size={14} color="white" />}
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-        <Text style={[styles.messageContent, !item.read && styles.unreadText]}>
-          {item.content}
-        </Text>
-      </TouchableOpacity>
+          <Text style={[styles.messageContent, !item.read && styles.unreadText]}>
+            {item.content}
+          </Text>
+        </TouchableOpacity>
+      </View>
     );
+
+    if (isEditMode) {
+      return MessageCard;
+    } else {
+      return (
+        <Swipeable
+          ref={ref => (rowRefs.current[item.messageId] = ref)}
+          renderRightActions={() => renderSwipeLeftActions(item)}
+          renderLeftActions={() => renderSwipeRightActions(item)}
+          overshootRight={false}
+          overshootLeft={false}
+          onSwipeableWillOpen={() => closeOtherRows(item.messageId)}
+          enabled={!actionLoading}
+        >
+          {MessageCard}
+        </Swipeable>
+      );
+    }
   };
 
   const styles = StyleSheet.create({
@@ -288,14 +477,18 @@ const MessagesScreen = ({ navigation }) => {
     listContainer: {
       flex: 1,
     },
+    // Message Card Styles
     messageCard: {
       backgroundColor: theme.surface,
       marginHorizontal: getSpacing.md,
       marginVertical: getSpacing.xs,
-      padding: getSpacing.md,
       borderRadius: getBorderRadius.md,
       borderWidth: 1,
       borderColor: theme.border,
+      overflow: 'hidden', // Required for swipeable
+    },
+    messageContentWrapper: {
+      padding: getSpacing.md,
     },
     unreadMessage: {
       backgroundColor: theme.primary + '05',
@@ -343,13 +536,11 @@ const MessagesScreen = ({ navigation }) => {
       gap: getSpacing.sm,
     },
     unreadDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
+      width: 10,
+      height: 10,
+      borderRadius: 5,
       backgroundColor: theme.primary,
-    },
-    deleteButton: {
-      padding: getSpacing.xs,
+      marginRight: getSpacing.xs,
     },
     checkbox: {
       width: 20,
@@ -371,7 +562,7 @@ const MessagesScreen = ({ navigation }) => {
     },
     unreadText: {
       color: theme.text.primary,
-      fontWeight: '500',
+      fontWeight: '700',
     },
     emptyContainer: {
       flex: 1,
@@ -389,6 +580,43 @@ const MessagesScreen = ({ navigation }) => {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
+    },
+    // Swipe Action Styles
+    swipeActionContainerLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      paddingLeft: getSpacing.md,
+      marginVertical: getSpacing.xs,
+      marginLeft: getSpacing.md,
+      borderRadius: getBorderRadius.md,
+    },
+    swipeActionContainerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      paddingRight: getSpacing.md,
+      marginVertical: getSpacing.xs,
+      marginRight: getSpacing.md,
+      borderRadius: getBorderRadius.md,
+    },
+    swipeAction: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: 80,
+      height: '100%',
+    },
+    deleteSwipeAction: {
+      backgroundColor: theme.error,
+    },
+    readSwipeAction: {
+      backgroundColor: theme.primary,
+    },
+    swipeActionText: {
+      color: 'white',
+      fontSize: getTypography.caption.fontSize,
+      fontWeight: 'bold',
+      marginTop: getSpacing.xs,
     },
   });
 
@@ -418,17 +646,13 @@ const MessagesScreen = ({ navigation }) => {
           )}
         </View>
         <View style={styles.headerActions}>
-          {!isEditMode && unreadCount > 0 && (
-            <TouchableOpacity style={styles.actionButton} onPress={handleMarkAllAsRead}>
-              <Ionicons name="checkmark-done-outline" size={20} color={theme.primary} />
-            </TouchableOpacity>
-          )}
           {!isEditMode && messagesList.length > 0 && (
             <TouchableOpacity 
               style={styles.actionButton} 
               onPress={() => setIsEditMode(true)}
+              disabled={actionLoading}
             >
-              <Ionicons name="create-outline" size={20} color={theme.text.secondary} />
+              <Ionicons name="create-outline" size={24} color={theme.text.secondary} />
             </TouchableOpacity>
           )}
           {isEditMode && (
@@ -438,8 +662,26 @@ const MessagesScreen = ({ navigation }) => {
                 setIsEditMode(false);
                 setSelectedMessages(new Set());
               }}
+              disabled={actionLoading}
             >
-              <Ionicons name="close" size={20} color={theme.text.secondary} />
+              <Ionicons name="close-outline" size={24} color={theme.text.secondary} />
+            </TouchableOpacity>
+          )}
+          {!isEditMode && messagesList.length > 0 && (
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => Alert.alert(
+                "Message Actions",
+                "Choose an action:",
+                [
+                  { text: "Mark All as Read", onPress: handleMarkAllAsRead },
+                  { text: "Delete All", onPress: handleDeleteAll, style: 'destructive' },
+                  { text: "Cancel", style: "cancel" }
+                ]
+              )}
+              disabled={actionLoading}
+            >
+              <Ionicons name="ellipsis-vertical" size={24} color={theme.text.secondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -455,6 +697,7 @@ const MessagesScreen = ({ navigation }) => {
             <TouchableOpacity 
               style={styles.selectButton}
               onPress={selectedMessages.size === messagesList.length ? handleDeselectAll : handleSelectAll}
+              disabled={actionLoading}
             >
               <Text style={styles.selectButtonText}>
                 {selectedMessages.size === messagesList.length ? 'Deselect All' : 'Select All'}
@@ -463,7 +706,11 @@ const MessagesScreen = ({ navigation }) => {
           </View>
           <View style={styles.editModeRight}>
             {selectedMessages.size > 0 && (
-              <TouchableOpacity style={styles.actionButton} onPress={handleDeleteSelected}>
+              <TouchableOpacity 
+                style={styles.actionButton} 
+                onPress={handleDeleteSelected}
+                disabled={actionLoading}
+              >
                 <Ionicons name="trash-outline" size={20} color={theme.error} />
               </TouchableOpacity>
             )}
@@ -490,6 +737,34 @@ const MessagesScreen = ({ navigation }) => {
           />
         )}
       </View>
+
+      {/* Loading Overlay */}
+      {actionLoading && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      )}
+
+      {/* Message Detail Modal */}
+      {selectedMessage && (
+        <MessageDetailModal
+          isVisible={isModalVisible}
+          onClose={() => {
+            setIsModalVisible(false);
+            setSelectedMessage(null);
+          }}
+          message={selectedMessage}
+        />
+      )}
     </SafeAreaView>
   );
 };

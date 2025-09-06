@@ -19,8 +19,6 @@ const ExpandableCalendarsSection = ({
   const [addedCalendars, setAddedCalendars] = useState([]); // To be added
   const [removedCalendars, setRemovedCalendars] = useState([]); // To be removed
   const [loading, setLoading] = useState(false);
-  console.log("🔍 Current selectedCalendars:", selectedCalendars);
-console.log("🔍 Current originalCalendars:", originalCalendars);
 
   // Check if current user is admin
   const currentUserMember = group.members?.find(member => member.userId === currentUserId);
@@ -38,19 +36,13 @@ console.log("🔍 Current originalCalendars:", originalCalendars);
       type: 'owned'
     })),
   ] : [];
-  console.log("Users Calendars IN ExpandableCalendarsSection:", userCalendars);
 
   // Initialize state when component mounts or group changes
   useEffect(() => {
     if (group && isAdmin) {
-        console.log("Group Calendars in ExpandableCalendarsSection:", group.calendars);
       const currentlySharedIds = (group.calendars || group.sharedCalendars || []).map(cal => 
         cal.calendarId || cal.id
       );
-
-      console.log("🔍 Currently shared IDs:", currentlySharedIds);
-    console.log("🔍 User calendar IDs:", userCalendars.map(c => c.calendarId));
-    console.log("🔍 Setting selectedCalendars to:", currentlySharedIds);
       
       setOriginalCalendars(currentlySharedIds);
       setSelectedCalendars(currentlySharedIds);
@@ -97,20 +89,14 @@ console.log("🔍 Current originalCalendars:", originalCalendars);
     
     if (!hasChanges || !isAdmin) return;
   
-    console.log('🔍 IN SAVE - addedCalendars:', addedCalendars);
-    console.log('🔍 IN SAVE - removedCalendars:', removedCalendars);
-    console.log('🔍 IN SAVE - userCalendars:', userCalendars.map(c => c.calendarId));
-  
     setLoading(true);
     try {
       // Add calendars to group
       if (addedCalendars.length > 0) {
         const addedCalendarObjects = userCalendars.filter(cal => {
           const isMatch = addedCalendars.includes(cal.calendarId);
-          console.log(`🔍 IN SAVE - Checking ${cal.calendarId}: ${isMatch ? 'MATCH' : 'NO MATCH'}`);
           return isMatch;
         });
-        console.log('🔍 IN SAVE - Added Calendar Objects:', addedCalendarObjects);
         
         await addCalendarsToGroup(group.id, addedCalendarObjects);
       }
@@ -119,7 +105,6 @@ console.log("🔍 Current originalCalendars:", originalCalendars);
         const removedCalendarObjects = userCalendars.filter(cal => 
           removedCalendars.includes(cal.calendarId)
         );
-        console.log('🔍 IN SAVE - Removed Calendar Objects:', removedCalendarObjects);
         await removeCalendarFromGroup(group.id, removedCalendarObjects);
       }
       
@@ -161,20 +146,13 @@ console.log("🔍 Current originalCalendars:", originalCalendars);
   // Get the actual calendar objects for adding and logging
 const addedCalendarObjects = userCalendars.filter(cal => {
     const isMatch = addedCalendars.includes(cal.calendarId);
-    console.log(`🔍 Checking calendar ${cal.calendarId} (${cal.name}): ${isMatch ? 'MATCH' : 'NO MATCH'}`);
     return isMatch;
   });
-  
-  console.log('🔍 userCalendars calendarIds:', userCalendars.map(c => c.calendarId));
-  console.log('🔍 addedCalendars array:', addedCalendars);
-  console.log('➕ Added Calendar Objects:', addedCalendarObjects);
 
   const removedCalendarObjects = userCalendars.filter(cal => {
     const isMatch = removedCalendars.includes(cal.calendarId);
-    console.log(`🔍 Checking removal for calendar ${cal.calendarId}: ${isMatch ? 'MATCH' : 'NO MATCH'}`);
     return isMatch;
   });
-  console.log('➖ Removed Calendar Objects:', removedCalendarObjects);
 
   const styles = {
     container: {
