@@ -17,7 +17,7 @@ const Header = ({
   onBackPress = null
 }) => {
   const { theme, isDarkMode, toggleTheme, getSpacing, getTypography } = useTheme();
-  const { user } = useData();
+  const { user, unreadMessagesCount } = useData();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
 
   const styles = StyleSheet.create({
@@ -91,8 +91,12 @@ const Header = ({
       fontWeight: getTypography.h4.fontWeight,
       color: theme.text.primary,
     },
+    hamburgerContainer: {
+      position: 'relative',
+    },
     hamburgerButton: {
       padding: getSpacing.sm,
+      paddingHorizontal: getSpacing.lg,
       marginLeft: getSpacing.sm,
       borderRadius: 20,
       backgroundColor: theme.button.secondary,
@@ -101,6 +105,25 @@ const Header = ({
       fontSize: 18,
       color: theme.button.secondaryText,
       lineHeight: 20,
+    },
+    notificationBadge: {
+      position: 'absolute',
+      top: -2,
+      right: -2,
+      backgroundColor: '#EF4444', // Red color
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: theme.header, // Match header background
+    },
+    notificationText: {
+      color: 'white',
+      fontSize: 12,
+      fontWeight: 'bold',
+      textAlign: 'center',
     },
   });
 
@@ -114,6 +137,12 @@ const Header = ({
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
+  };
+
+  const formatNotificationCount = (count) => {
+    if (count <= 0) return '';
+    if (count > 99) return '99+';
+    return count.toString();
   };
 
   return (
@@ -153,13 +182,24 @@ const Header = ({
 
         {/* Right Section */}
         <View style={styles.rightSection}>
-          {/* Hamburger Menu */}
-          <TouchableOpacity 
-            style={styles.hamburgerButton} 
-            onPress={() => setIsMenuVisible(!isMenuVisible)}
-          >
-            <Text style={styles.hamburgerText}>☰</Text>
-          </TouchableOpacity>
+          {/* Hamburger Menu with Notification Badge */}
+          <View style={styles.hamburgerContainer}>
+            <TouchableOpacity 
+              style={styles.hamburgerButton} 
+              onPress={() => setIsMenuVisible(!isMenuVisible)}
+            >
+              <Text style={styles.hamburgerText}>☰</Text>
+            </TouchableOpacity>
+            
+            {/* Notification Badge */}
+            {unreadMessagesCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationText}>
+                  {formatNotificationCount(unreadMessagesCount)}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
@@ -170,6 +210,7 @@ const Header = ({
         onLogout={onLogout}
         isDarkMode={isDarkMode}
         toggleTheme={toggleTheme}
+        unreadMessagesCount={unreadMessagesCount}
       />
     </>
   );

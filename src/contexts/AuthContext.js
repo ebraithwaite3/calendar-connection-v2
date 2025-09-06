@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { initializeAuth, initializeFirestore } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { deleteDoc } from 'firebase/firestore';
+
 
 const AuthContext = createContext();
 
@@ -48,8 +50,32 @@ export const AuthProvider = ({ children }) => {
     setupAuth();
   }, []);
 
+  const createMessageDoc = async (userId) => {
+    try {
+      const firestoreModule = await import('firebase/firestore');
+      const { DateTime } = await import('luxon');
+      
+      const createdAt = DateTime.now().toISO();
+      const messageData = {
+        userId,
+        messages: [],
+        createdAt,
+        updatedAt: createdAt,
+      };
+  
+      const messageRef = firestoreModule.doc(db, "messages", userId);
+      await firestoreModule.setDoc(messageRef, messageData);
+      console.log("✅ Message document created for user:", userId);
+  
+      return messageData;
+    } catch (error) {
+      console.error("❌ Error creating message document:", error);
+      throw error;
+    }
+  };
+
   // Helper function to create user document in Firestore
-  const createUserDocument = async (user, username, additionalData = {}) => {
+  const createUserDocument = async (user, username, notifications, additionalData = {}) => {
     if (!user || !db) return;
     
     try {
@@ -69,7 +95,6 @@ export const AuthProvider = ({ children }) => {
           username: username,
           groups: [],
           calendars: [],
-          subscriptions: [],
           createdAt: now,
           updatedAt: now,
           isActive: true,
@@ -81,7 +106,17 @@ export const AuthProvider = ({ children }) => {
             defaultCalendarView: 'month',
             defaultTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             weekStartsOn: 'sunday',
-            notifications: true,
+            notifications: notifications,
+            notifyFor: {
+              groupActivity: notifications,
+              newAssignments: notifications,
+              updatedAssignments: notifications,
+              deleteAssignments: notifications,
+              newNotes: notifications,
+              mentions: notifications,
+              reminders: notifications,
+              messages: notifications,
+            }
           },
           ...additionalData
         };
@@ -114,17 +149,37 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
-  const signup = async (email, password, username) => {
+  const signup = async (email, password, username, notifications) => {
     if (!auth) throw new Error('Auth not initialized');
     const authModule = await import('firebase/auth');
+    
+    // Step 1: Create Firebase auth user first (outside the atomic block)
     const result = await authModule.createUserWithEmailAndPassword(auth, email, password);
     
-    // Create user document on signup
-    await createUserDocument(result.user, username);
-
-    // Set default loading page in AsyncStorage
-    await AsyncStorage.setItem('defaultLoadingPage', 'Calendar');
-    
+    // ATOMIC OPERATIONS: Create user document and message document
+    try {
+      // Step 2: Create user document
+      await createUserDocument(result.user, username, notifications);
+      console.log('✅ User document created');
+  
+      // Step 3: Create message document
+      await createMessageDoc(result.user.uid);
+      console.log('✅ Message document created');
+  
+    } catch (error) {
+      console.error('❌ Atomic operation failed:', error);
+      
+      // Rollback: Delete Firebase auth user if document creation failed
+      try {
+        await result.user.delete();
+        console.log('🔄 Rollback: Firebase auth user deleted');
+      } catch (rollbackError) {
+        console.error('❌ Rollback failed:', rollbackError);
+      }
+      
+      throw new Error("Failed to create complete user profile");
+    }
+  
     return result;
   };
 

@@ -10,17 +10,16 @@ import {
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useData } from '../../contexts/DataContext';
-import { addCalendarWithStateUpdate, userHasCalendar } from '../../services/calendarService';
-import { useAuth } from '../../contexts/AuthContext';
-import ColorSelector from '../common/ColorSelector';
+import { useTheme } from '../contexts/ThemeContext';
+import { useData } from '../contexts/DataContext';
+import { useCalendarActions } from '../hooks';
+import ColorSelector from '../components/ColorSelector';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function ImportCalendarScreen({ navigation }) {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
   const { user, loading: userLoading } = useData();
-  const { user: authUser } = useAuth();
+  const { addCalendar } = useCalendarActions();
   
   const [calendarType, setCalendarType] = useState('google'); // 'google' or 'ical'
   const [ownershipType, setOwnershipType] = useState('owned'); // 'owned' or 'subscription'
@@ -109,33 +108,22 @@ export default function ImportCalendarScreen({ navigation }) {
       Alert.alert('Error', 'Please enter a valid calendar URL');
       return;
     }
-
-    // Check if user already has this calendar
-    const calendarAddress = url.trim();
-    if (user && userHasCalendar(user, calendarAddress)) {
-      Alert.alert('Duplicate Calendar', 'You have already added this calendar');
-      return;
-    }
   
     const calendarData = {
       name: name.trim(),
-      ...(ownershipType === 'owned' ? {
-        calendarAddress: url.trim(),
-        calendarType,
-        permissions: 'owner'
-      } : {
-        subscriptionAddress: url.trim(),
-        subscriptionType: calendarType,
-        permissions: 'read'
-      }),
+      calendarAddress: url.trim(),  // Use consistent property name
+      type: calendarType,
       color,
       description: description.trim(),
+      permissions: ownershipType === 'owned' ? 'owner' : 'read',
+      isOwner: ownershipType === 'owned'
     };
-
+  
     setImporting(true);
     
     try {
-      await addCalendarWithStateUpdate(authUser.userId, calendarData);
+      // Use the addCalendar from DataContext instead
+      await addCalendar(calendarData);
       
       Alert.alert(
         'Success', 

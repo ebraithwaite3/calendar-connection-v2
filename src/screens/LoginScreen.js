@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,37 +7,38 @@ import {
   StyleSheet,
   SafeAreaView,
   Alert,
-} from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+} from "react-native";
+import { useAuth } from "../contexts/AuthContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const LoginScreen = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [notifications, setNotifications] = useState(true);
   const [loading, setLoading] = useState(false);
-  
+
   const { login, signup } = useAuth();
 
   const clearLocalStorage = async () => {
     try {
       await AsyncStorage.clear();
-      console.log('Local storage cleared');
+      console.log("Local storage cleared");
     } catch (error) {
-      console.error('Error clearing local storage:', error);
+      console.error("Error clearing local storage:", error);
     }
   };
 
   const handleAuth = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     if (!isLogin && password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      Alert.alert("Error", "Passwords do not match");
       return;
     }
 
@@ -46,42 +47,42 @@ const LoginScreen = () => {
     try {
       if (isLogin) {
         await login(email, password);
-        console.log('User signed in successfully');
+        console.log("User signed in successfully");
       } else {
-        await signup(email, password, username);
-        console.log('User created successfully');
+        await signup(email, password, username, notifications);
+        console.log("User created successfully");
       }
       // No need to call onAuthSuccess - the AuthContext will handle the state change
     } catch (error) {
-      console.error('Auth error:', error);
-      
+      console.error("Auth error:", error);
+
       // Handle specific Firebase auth errors
-      let errorMessage = 'An error occurred';
-      
+      let errorMessage = "An error occurred";
+
       switch (error.code) {
-        case 'auth/email-already-in-use':
-          errorMessage = 'Email is already registered';
+        case "auth/email-already-in-use":
+          errorMessage = "Email is already registered";
           break;
-        case 'auth/weak-password':
-          errorMessage = 'Password should be at least 6 characters';
+        case "auth/weak-password":
+          errorMessage = "Password should be at least 6 characters";
           break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
+        case "auth/invalid-email":
+          errorMessage = "Invalid email address";
           break;
-        case 'auth/user-not-found':
-          errorMessage = 'No account found with this email';
+        case "auth/user-not-found":
+          errorMessage = "No account found with this email";
           break;
-        case 'auth/wrong-password':
-          errorMessage = 'Incorrect password';
+        case "auth/wrong-password":
+          errorMessage = "Incorrect password";
           break;
-        case 'auth/invalid-credential':
-          errorMessage = 'Invalid email or password';
+        case "auth/invalid-credential":
+          errorMessage = "Invalid email or password";
           break;
         default:
           errorMessage = error.message;
       }
-      
-      Alert.alert('Authentication Error', errorMessage);
+
+      Alert.alert("Authentication Error", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -92,7 +93,7 @@ const LoginScreen = () => {
       <View style={styles.content}>
         <Text style={styles.title}>Calendar ConnectionV2</Text>
         <Text style={styles.subtitle}>
-          {isLogin ? 'Welcome back!' : 'Create your account'}
+          {isLogin ? "Welcome back!" : "Create your account"}
         </Text>
 
         <View style={styles.form}>
@@ -116,7 +117,7 @@ const LoginScreen = () => {
               editable={!loading}
             />
           )}
-          
+
           <TextInput
             style={styles.input}
             placeholder="Password"
@@ -125,7 +126,7 @@ const LoginScreen = () => {
             secureTextEntry
             editable={!loading}
           />
-          
+
           {!isLogin && (
             <TextInput
               style={styles.input}
@@ -137,13 +138,39 @@ const LoginScreen = () => {
             />
           )}
 
-          <TouchableOpacity 
-            style={[styles.authButton, loading && styles.disabledButton]} 
+          {/* Checkbox for notifications - optional */}
+          {!isLogin && (
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
+              <TouchableOpacity
+                onPress={() => setNotifications(!notifications)}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderWidth: 1,
+                  borderColor: "#d1d5db",
+                  borderRadius: 4,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 8,
+                  backgroundColor: notifications ? "#3b82f6" : "white",
+                }}
+                disabled={loading}
+              >
+                {notifications && (
+                  <Text style={{ color: "white", fontWeight: "bold" }}>✓</Text>
+                )}
+              </TouchableOpacity>
+              <Text style={{ color: "#374151" }}>Enable Notifications? (You can edit later.)</Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.authButton, loading && styles.disabledButton]}
             onPress={handleAuth}
             disabled={loading}
           >
             <Text style={styles.authButtonText}>
-              {loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Sign Up')}
+              {loading ? "Loading..." : isLogin ? "Sign In" : "Sign Up"}
             </Text>
           </TouchableOpacity>
 
@@ -153,20 +180,11 @@ const LoginScreen = () => {
             disabled={loading}
           >
             <Text style={[styles.switchText, loading && styles.disabledText]}>
-              {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+              {isLogin
+                ? "Don't have an account? Sign Up"
+                : "Already have an account? Sign In"}
             </Text>
           </TouchableOpacity>
-          {/* Button to clear Async */}
-          <View style={{ height: 24 }} />
-          <TouchableOpacity
-            style={styles.switchButton}
-            onPress={clearLocalStorage}
-            disabled={loading}
-          >
-            <Text style={[styles.switchText, loading && styles.disabledText]}>
-              Clear Local Storage
-            </Text>
-          </TouchableOpacity> 
         </View>
       </View>
     </SafeAreaView>
@@ -176,33 +194,33 @@ const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8faff',
+    backgroundColor: "#f8faff",
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 32,
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#1f2937',
+    fontWeight: "bold",
+    textAlign: "center",
+    color: "#1f2937",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 18,
-    textAlign: 'center',
-    color: '#6b7280',
+    textAlign: "center",
+    color: "#6b7280",
     marginBottom: 48,
   },
   form: {
-    width: '100%',
+    width: "100%",
   },
   input: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -210,29 +228,29 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   authButton: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: "#3b82f6",
     borderRadius: 12,
     paddingVertical: 16,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
   },
   authButtonText: {
-    color: 'white',
+    color: "white",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   disabledButton: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: "#9ca3af",
   },
   switchButton: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   switchText: {
-    color: '#3b82f6',
+    color: "#3b82f6",
     fontSize: 16,
   },
   disabledText: {
-    color: '#9ca3af',
+    color: "#9ca3af",
   },
 });
 

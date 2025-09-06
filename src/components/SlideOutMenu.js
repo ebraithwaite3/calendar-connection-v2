@@ -9,6 +9,7 @@ import {
   Animated,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useNavigation } from '@react-navigation/native';
 
 const SlideOutMenu = ({ 
   isVisible, 
@@ -18,6 +19,7 @@ const SlideOutMenu = ({
   toggleTheme 
 }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
+  const navigation = useNavigation();
 
   const styles = StyleSheet.create({
     overlay: {
@@ -73,6 +75,11 @@ const SlideOutMenu = ({
     onLogout();
   };
 
+  const handleMessagesNavigation = () => {
+    onClose();
+    navigation.navigate('Messages');
+  };
+
   return (
     <Modal
       animationType="slide"
@@ -87,6 +94,12 @@ const SlideOutMenu = ({
               {/* Close Button */}
               <TouchableOpacity style={styles.closeButton} onPress={onClose}>
                 <Text style={styles.closeText}>×</Text>
+              </TouchableOpacity>
+
+              {/* Messages */}
+              <TouchableOpacity style={styles.menuItem} onPress={handleMessagesNavigation}>
+                <Text style={styles.menuItemIcon}>💬</Text>
+                <Text style={styles.menuItemText}>Messages</Text>
               </TouchableOpacity>
 
               {/* Theme Toggle */}
