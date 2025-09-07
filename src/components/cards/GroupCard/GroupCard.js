@@ -111,7 +111,7 @@ const GroupCard = ({ group, currentUserId }) => {
       "Delete Group",
       `Are you sure you want to delete "${
         group.name || group.groupName
-      }"?\n\nThis action will:\n• Remove all group assignments\n• Remove the group from shared calendars\n• Remove all members from the group\n\nThis cannot be undone.`,
+      }"?\n\nThis action will:\n• Remove all group tasks\n• Remove the group from shared calendars\n• Remove all members from the group\n\nThis cannot be undone.`,
       [
         {
           text: "Cancel",
@@ -172,7 +172,7 @@ const GroupCard = ({ group, currentUserId }) => {
       "Leave Group",
       `Are you sure you want to leave "${
         group.name || group.groupName
-      }"?\n\nYou will no longer have access to group assignments and shared calendars. You can rejoin later with the invite code if needed.`,
+      }"?\n\nYou will no longer have access to group tasks and shared calendars. You can rejoin later with the invite code if needed.`,
       [
         {
           text: "Cancel",
@@ -223,7 +223,7 @@ const GroupCard = ({ group, currentUserId }) => {
       "Rejoin Group",
       `Do you want to rejoin "${
         group.name || group.groupName
-      }"?\n\nYou will regain access to group assignments and shared calendars.`,
+      }"?\n\nYou will regain access to group tasks and shared calendars.`,
       [
         {
           text: "Cancel",

@@ -109,9 +109,9 @@ export const AuthProvider = ({ children }) => {
             notifications: notifications,
             notifyFor: {
               groupActivity: notifications,
-              newAssignments: notifications,
-              updatedAssignments: notifications,
-              deleteAssignments: notifications,
+              newTasks: notifications,
+              updatedTasks: notifications,
+              deleteTasks: notifications,
               newNotes: notifications,
               mentions: notifications,
               reminders: notifications,

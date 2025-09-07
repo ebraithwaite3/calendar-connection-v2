@@ -2,7 +2,7 @@
 import { use, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useData } from "../contexts/DataContext";
-import { useAssignmentActions } from "./useAssignmentActions";
+import { useTaskActions } from "./useTaskActions";
 import { addUserToCalendar } from "../services/calendarService";
 import { addMessageToUser } from "../services/messageService";
 import {
@@ -18,7 +18,7 @@ import { arrayUnion } from "firebase/firestore";
 export const useGroupActions = () => {
   const { user: authUser } = useAuth();
   const { user, myUsername, myUserId } = useData();
-  const { createAssignmentDoc } = useAssignmentActions();
+  const { createTaskDoc } = useTaskActions();
 
   const uuidv4 = () => Crypto.randomUUID();
 
@@ -108,12 +108,12 @@ export const useGroupActions = () => {
               notifyFor: {
                 groupActivity:
                   user.preferences?.notifyFor?.groupActivity ?? true,
-                newAssignments:
-                  user.preferences?.notifyFor?.newAssignments ?? true,
-                updatedAssignments:
-                  user.preferences?.notifyFor?.updatedAssignments ?? true,
-                deleteAssignments:
-                  user.preferences?.notifyFor?.deleteAssignments ?? true,
+                newTasks:
+                  user.preferences?.notifyFor?.newTasks ?? true,
+                updatedTasks:
+                  user.preferences?.notifyFor?.updatedTasks ?? true,
+                deleteTasks:
+                  user.preferences?.notifyFor?.deleteTasks ?? true,
                 newNotes: user.preferences?.notifyFor?.newNotes ?? true,
                 mentions: user.preferences?.notifyFor?.mentions ?? true,
                 reminders: user.preferences?.notifyFor?.reminders ?? true,
@@ -134,22 +134,22 @@ export const useGroupActions = () => {
           JSON.stringify(newGroup, null, 2)
         );
 
-        // ATOMIC OPERATIONS: Create group and assignment documents
+        // ATOMIC OPERATIONS: Create group and task documents
         try {
           // Step 1: Create group document
           await createDocument("groups", groupId, newGroup);
           console.log("✅ Group document created");
 
-          // Step 2: Create assignment document using the dedicated function
-          await createAssignmentDoc(groupData, groupId, {
+          // Step 2: Create task document using the dedicated function
+          await createTaskDoc(groupData, groupId, {
             userId: myUserId,
             username: myUsername,
           });
-          console.log("✅ Assignment document created");
+          console.log("✅ Task document created");
         } catch (error) {
           console.error("❌ Atomic operation failed:", error);
 
-          // Rollback: Delete group document if assignment creation failed
+          // Rollback: Delete group document if task creation failed
           try {
             await deleteDocument("groups", groupId);
             console.log("🔄 Rollback: Group document deleted");
@@ -183,7 +183,7 @@ export const useGroupActions = () => {
       myUserId,
       myUsername,
       user?.groups,
-      createAssignmentDoc,
+      createTaskDoc,
     ]
   );
 
@@ -252,11 +252,11 @@ export const useGroupActions = () => {
           active: true,
           notifyFor: {
             groupActivity: user.preferences?.notifyFor?.groupActivity ?? true,
-            newAssignments: user.preferences?.notifyFor?.newAssignments ?? true,
-            updatedAssignments:
-              user.preferences?.notifyFor?.updatedAssignments ?? true,
-            deleteAssignments:
-              user.preferences?.notifyFor?.deleteAssignments ?? true,
+            newTasks: user.preferences?.notifyFor?.newTasks ?? true,
+            updatedTasks:
+              user.preferences?.notifyFor?.updatedTasks ?? true,
+            deleteTasks:
+              user.preferences?.notifyFor?.deleteTasks ?? true,
             newNotes: user.preferences?.notifyFor?.newNotes ?? true,
             mentions: user.preferences?.notifyFor?.mentions ?? true,
             reminders: user.preferences?.notifyFor?.reminders ?? true,
@@ -1166,7 +1166,7 @@ export const useGroupActions = () => {
           `✅ Successfully removed group from all ${allMemberIds.length} user documents`
         );
 
-        // ✅ STEP 2: Delete the group and assignment documents
+        // ✅ STEP 2: Delete the group and task documents
         try {
           // Delete the group document
           await deleteDocument("groups", group.groupId);
@@ -1182,19 +1182,19 @@ export const useGroupActions = () => {
         }
 
         try {
-          // Delete the assignment document
-          await deleteDocument("assignments", group.groupId);
+          // Delete the task document
+          await deleteDocument("tasks", group.groupId);
           console.log(
-            `✅ Successfully deleted assignment document ${group.groupId}`
+            `✅ Successfully deleted task document ${group.groupId}`
           );
         } catch (error) {
           console.error(
-            `❌ Failed to delete assignment document ${group.groupId}:`,
+            `❌ Failed to delete task document ${group.groupId}:`,
             error
           );
-          // Note: We don't throw here since the assignment document might not exist
+          // Note: We don't throw here since the task document might not exist
           console.warn(
-            "Assignment document deletion failed, but continuing with group deletion"
+            "Task document deletion failed, but continuing with group deletion"
           );
         }
 
@@ -1345,47 +1345,47 @@ export const useGroupActions = () => {
           );
         }
 
-        // STEP 2: Remove assignments linked to the removed calendars
+        // STEP 2: Remove tasks linked to the removed calendars
         try {
-          const assignmentQuery = await getDocumentsByField(
-            "assignments",
-            "assignmentId",
+          const taskQuery = await getDocumentsByField(
+            "tasks",
+            "taskId",
             group.groupId
           );
 
-          if (assignmentQuery.length > 0) {
-            const assignmentDoc = assignmentQuery[0];
-            const originalAssignmentsCount =
-              assignmentDoc.assignments?.length || 0;
-            const updatedAssignments = (assignmentDoc.assignments || []).filter(
+          if (taskQuery.length > 0) {
+            const taskDoc = taskQuery[0];
+            const originalTasksCount =
+              taskDoc.tasks?.length || 0;
+            const updatedTasks = (taskDoc.tasks || []).filter(
               (a) => !calendarIdsToRemove.has(a.calendarId)
             );
 
-            const removedAssignmentsCount =
-              originalAssignmentsCount - updatedAssignments.length;
+            const removedTasksCount =
+              originalTasksCount - updatedTasks.length;
 
-            await updateDocument("assignments", assignmentDoc.docId, {
-              assignments: updatedAssignments,
+            await updateDocument("tasks", taskDoc.docId, {
+              tasks: updatedTasks,
               updatedAt: DateTime.now().toISO(),
             });
 
             console.log(
-              `✅ Removed ${removedAssignmentsCount} assignments linked to calendars ${[
+              `✅ Removed ${removedTasksCount} tasks linked to calendars ${[
                 ...calendarIdsToRemove,
               ].join(", ")}`
             );
           } else {
             console.log(
-              "No assignment document found for this group, skipping assignment cleanup"
+              "No task document found for this group, skipping task cleanup"
             );
           }
         } catch (error) {
           console.error(
-            `❌ Failed to update assignments for calendars:`,
+            `❌ Failed to update tasks for calendars:`,
             error
           );
           console.warn(
-            "Calendar removal from group succeeded, but assignment cleanup failed"
+            "Calendar removal from group succeeded, but task cleanup failed"
           );
         }
 

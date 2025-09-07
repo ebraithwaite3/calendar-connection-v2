@@ -32,13 +32,13 @@ export const DataProvider = ({ children }) => {
   // Resource states
   const [calendars, setCalendars] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [assignments, setAssignments] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [messages, setMessages] = useState([]);
   
   // Loading states (only needed for initial loads)
   const [calendarsLoading, setCalendarsLoading] = useState(false);
   const [groupsLoading, setGroupsLoading] = useState(false);
-  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [tasksLoading, setTasksLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
 
   console.log("📊 DataContext State:", { 
@@ -46,7 +46,7 @@ export const DataProvider = ({ children }) => {
     userLoaded: !!user, 
     calendarsCount: calendars?.length,
     groupsCount: groups?.length,
-    assignmentsCount: assignments?.length,
+    tasksCount: tasks?.length,
     messagesCount: messages.messages?.length,
     unreadMessagesCount: messages.messages?.filter(m => !m.read).length || 0,
   });
@@ -85,7 +85,7 @@ export const DataProvider = ({ children }) => {
       setLoading(false);
       setCalendars([]);
       setGroups([]);
-      setAssignments([]);
+      setTasks([]);
       setMessages([]);
     }
     
@@ -206,7 +206,7 @@ export const DataProvider = ({ children }) => {
       // Placeholder until real-time data arrives
       members: [],
       calendars: [],
-      assignments: [],
+      tasks: [],
     }));
     
     setGroups(initialGroups);
@@ -263,52 +263,52 @@ export const DataProvider = ({ children }) => {
     const validGroupRefs = (user?.groups || []).filter(ref => ref.groupId);
     
     if (validGroupRefs.length === 0) {
-      console.log("📝 No valid group references found for assignments");
-      setAssignments([]);
-      setAssignmentsLoading(false);
+      console.log("📝 No valid group references found for tasks");
+      setTasks([]);
+      setTasksLoading(false);
       return;
     }
 
-    console.log("📝 Setting up assignment subscriptions...");
-    setAssignmentsLoading(true);
+    console.log("📝 Setting up task subscriptions...");
+    setTasksLoading(true);
     
     const groupIds = validGroupRefs.map(ref => ref.groupId);
     const unsubscribes = [];
     
-    // Initialize empty assignments
-    setAssignments([]);
+    // Initialize empty tasks
+    setTasks([]);
     
-    // Subscribe to each group's assignments document
+    // Subscribe to each group's tasks document
     groupIds.forEach(groupId => {
       const unsubscribe = subscribeToDocument(
-        'assignments',
+        'tasks',
         groupId,
-        (assignmentDoc) => {
-          if (assignmentDoc) {
-            console.log(`📝 Assignments for group ${groupId} updated`);
-            setAssignments(prev => {
-              // Remove old assignments for this group and add new ones
-              const filteredAssignments = prev.filter(assignment => assignment.groupId !== groupId);
-              return [...filteredAssignments, assignmentDoc];
+        (taskDoc) => {
+          if (taskDoc) {
+            console.log(`📝 Tasks for group ${groupId} updated`);
+            setTasks(prev => {
+              // Remove old tasks for this group and add new ones
+              const filteredTasks = prev.filter(task => task.groupId !== groupId);
+              return [...filteredTasks, taskDoc];
             });
           } else {
-            console.log(`ℹ️ No assignments document for group ${groupId}`);
-            // Remove assignments for this group if document doesn't exist
-            setAssignments(prev => prev.filter(assignment => assignment.groupId !== groupId));
+            console.log(`ℹ️ No tasks document for group ${groupId}`);
+            // Remove tasks for this group if document doesn't exist
+            setTasks(prev => prev.filter(task => task.groupId !== groupId));
           }
         },
         (error) => {
-          console.error(`❌ Assignments ${groupId} subscription error:`, error);
+          console.error(`❌ Tasks ${groupId} subscription error:`, error);
         }
       );
       
       unsubscribes.push(unsubscribe);
     });
     
-    setAssignmentsLoading(false);
+    setTasksLoading(false);
     
     return () => {
-      console.log("🧹 Cleaning up assignment subscriptions");
+      console.log("🧹 Cleaning up task subscriptions");
       unsubscribes.forEach(unsubscribe => unsubscribe());
     };
   }, [user?.groups]);
@@ -414,20 +414,20 @@ const messagesCount = useMemo(() => {
     // Resources (now real-time!)
     calendars,
     groups,
-    assignments,
+    tasks,
     messages,
     
     // Loading states (only for initial setup)
     calendarsLoading,
     groupsLoading,
-    assignmentsLoading,
+    tasksLoading,
     messagesLoading,
 
     // Computed properties
     isDataLoaded: !loading && !!user,
     hasCalendars: calendars.length > 0,
     hasGroups: groups.length > 0,
-    hasAssignments: assignments.length > 0,
+    hasTasks: tasks.length > 0,
     
     // Legacy compatibility
     calendarsInfo: user?.calendars || [],
@@ -450,10 +450,10 @@ const messagesCount = useMemo(() => {
     currentDate,
     calendars,
     groups,
-    assignments,
+    tasks,
     calendarsLoading,
     groupsLoading,
-    assignmentsLoading,
+    tasksLoading,
     messages,
     messagesLoading,
     setWorkingDate,

@@ -1,4 +1,4 @@
 export { useCalendarActions } from './useCalendarActions';
 export { useGroupActions } from './useGroupActions';
-export { useAssignmentActions } from './useAssignmentActions';
+export { useTaskActions } from './useTaskActions';
 export { useMessageActions } from './useMessageActions';
