@@ -7,18 +7,24 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useData } from '../contexts/DataContext';
 import EventHeader from '../components/EventHeader';
+import AttendanceCard from '../components/cards/TaskCards/Attendance/AttendanceCard';
+import TransportCard from '../components/cards/TaskCards/Transport/TransportCard';
+import ChecklistCard from '../components/cards/TaskCards/Checklist/ChecklistCard';
 import { DateTime } from 'luxon';
 import { Ionicons } from '@expo/vector-icons';
+import { useTaskActions } from '../hooks';
 
 const EventDetailsScreen = ({ route, navigation }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
   const { user, calendars, groups, tasks, currentDate } = useData();
-  const { eventId, calendarId } = route.params || { eventId: 'unknown' };
-  console.log('EventDetailsScreen rendered with eventId:', eventId, 'calendarId:', calendarId, "For Current Date:", currentDate);
+  const { updateTask, deleteTask } = useTaskActions();
+  const { eventId, calendarId, taskId } = route.params || { eventId: 'unknown' };
+  console.log('EventDetailsScreen rendered with eventId:', eventId, 'calendarId:', calendarId, "taskId", taskId , "For Current Date:", currentDate);
 
   // Find the calendar that has the calendarId
   const event = useMemo(() => {
@@ -61,20 +67,43 @@ const EventDetailsScreen = ({ route, navigation }) => {
   }, [groups, calendarId]);
   console.log("Event belongs to groups:", eventGroups, "Groups data:", groups, "CalendarId:", calendarId);
 
-  // If there are eventGroups, use the taskDocs that have a groupId that is in eventGroups
-  // Then find any tasks that have a matching calendarId and eventId
+  // Find tasks that match this event
   const relatedTasks = useMemo(() => {
     if (!tasks || tasks.length === 0 || eventGroups.length === 0 || !event || !event.eventId) return [];
-    return tasks.filter(task => 
+    
+    // Flatten the nested tasks structure
+    const allTasks = tasks.flatMap(group => 
+      (group.tasks || []).map(task => ({
+        ...task,
+        groupId: group.groupId, // Ensure groupId is available on each task
+        groupName: group.name
+      }))
+    );
+    
+    console.log("All flattened tasks:", allTasks);
+    
+    return allTasks.filter(task => 
       eventGroups.includes(task.groupId) && 
-      task.tasks && 
-      task.tasks.some(a => a.eventId === event.eventId)
+      task.eventId === event.eventId
     );
   }, [tasks, eventGroups, event]);
   console.log("Related tasks for event:", relatedTasks);
 
+  // Get the group that these tasks belong to
+  const thisGroup = useMemo(() => {
+    if (!groups || groups.length === 0 || eventGroups.length === 0) return null;
+    return groups.find(group => eventGroups.includes(group.groupId));
+  }, [groups, eventGroups]);
+
+  // Check if user is admin of this group, using thisGroup.members and finding my then checking my role
+  const amIAdminOfThisGroup = useMemo(() => {
+    if (!thisGroup || !thisGroup.members || !Array.isArray(thisGroup.members) || !user) return false;
+    const me = thisGroup.members.find(member => member.userId === user.userId);
+    return me?.role === 'admin' || false;
+  }, [thisGroup, user]);
+
   // Has the event started?
-  const gameTimeInfo = useMemo(() => {
+  const eventTimeInfo = useMemo(() => {
     if (!event || !event.startTime) return { hasStarted: false, isAllDay: false };
     const start = DateTime.fromISO(event.startTime);
     const now = DateTime.now();
@@ -85,12 +114,61 @@ const EventDetailsScreen = ({ route, navigation }) => {
       isAllDay: isAllDay 
     };
   }, [event]);
-  console.log("Event time info:", gameTimeInfo);
+  console.log("Event time info:", eventTimeInfo);
 
   const handleCreateTask = () => {
     console.log('Create task for event:', eventId, calendarId, eventGroups);
     // TODO: Navigate to task creation screen
-    // navigation.navigate('CreateTask', { eventId, calendarId });
+    navigation.navigate('CreateTask', { eventId, calendarId });
+  };
+
+  // Handle task updates using the new updateTask function
+  const handleTaskUpdate = async (updatedTask) => {
+    console.log('Task updated:', updatedTask);
+    try {
+      await updateTask(
+        updatedTask.groupId,
+        updatedTask.taskId,
+        updatedTask,
+        user?.userId
+      );
+      console.log('✅ Task successfully updated in database');
+    } catch (error) {
+      console.error('❌ Error updating task:', error);
+      // You might want to show an error message to the user here
+    }
+  };
+
+  const handleDeleteTask = async (taskId, groupId) => {
+    // Show confirmation alert first
+    Alert.alert(
+      "Delete Assignment",
+      "Are you sure you want to delete this assignment? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteTask(groupId, taskId, user?.userId);
+              
+              console.log('✅ Task deleted successfully');
+              
+              // Optionally refresh your tasks list or remove from local state
+              // You might want to call a function here to update your UI
+              
+            } catch (error) {
+              console.error('❌ Error deleting task:', error);
+              Alert.alert('Error', 'Failed to delete task. Please try again.');
+            } 
+          }
+        }
+      ]
+    );
   };
 
   // Go back function that checks 1) can we go back? If so go back
@@ -106,6 +184,34 @@ const EventDetailsScreen = ({ route, navigation }) => {
       } else {
         navigation.navigate('Calendar', { screen: 'CalendarHome' });
       }
+    }
+  };
+
+  // Render task card based on type
+  const renderTaskCard = (task, index) => {
+    const commonProps = {
+      assignment: task,
+      groupId: task.groupId,
+      onAssignmentUpdate: handleTaskUpdate,
+      isEventPast: false, // You can enhance this later
+      thisGroup: thisGroup,
+      amIAdminOfThisGroup: amIAdminOfThisGroup,
+      eventDate: event?.startTime,
+      onDeleteAssignment: () => handleDeleteTask(task.taskId, task.groupId),
+      isDeleting: false, // You can add loading state later
+    };
+    const taskKey = task.taskId || index;
+
+    switch (task.taskType) {
+      case 'Attendance':
+        return <AttendanceCard key={taskKey} {...commonProps} />;
+      case 'Transport':
+        return <TransportCard key={taskKey} {...commonProps} />;
+      case 'Checklist':
+        return <ChecklistCard key={taskKey} {...commonProps} />;
+      default:
+        console.warn('Unknown task type:', task.taskType);
+        return null;
     }
   };
 
@@ -173,26 +279,6 @@ const EventDetailsScreen = ({ route, navigation }) => {
       fontWeight: getTypography.button.fontWeight,
       color: theme.text.inverse,
       marginLeft: getSpacing.sm,
-    },
-    tasksList: {
-      backgroundColor: theme.surface,
-      borderRadius: getBorderRadius.lg,
-      padding: getSpacing.md,
-    },
-    taskItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: getSpacing.sm,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    taskIcon: {
-      marginRight: getSpacing.md,
-    },
-    taskText: {
-      flex: 1,
-      fontSize: getTypography.body.fontSize,
-      color: theme.text.primary,
     },
     emptyTasks: {
       backgroundColor: theme.surface,
@@ -268,26 +354,12 @@ const EventDetailsScreen = ({ route, navigation }) => {
                   </TouchableOpacity>
                 </View>
 
-                {/* Tasks List */}
-                <View style={styles.tasksList}>
-                  {relatedTasks.map((task, index) => (
-                    <View key={task.id || index} style={styles.taskItem}>
-                      <Ionicons 
-                        name="clipboard-outline" 
-                        size={20} 
-                        color={theme.text.secondary} 
-                        style={styles.taskIcon}
-                      />
-                      <Text style={styles.taskText}>
-                        {task.title || task.name || `Task ${index + 1}`}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                {/* Render all task cards */}
+                {relatedTasks.map((task, index) => renderTaskCard(task, index))}
               </>
             ) : (
               <>
-                
+                {/* No tasks - show create button */}
                 <TouchableOpacity 
                   style={styles.addButtonFull}
                   onPress={handleCreateTask}

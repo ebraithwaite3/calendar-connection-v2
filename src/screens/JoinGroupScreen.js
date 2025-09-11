@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -22,6 +24,8 @@ const JoinGroupScreen = ({ navigation }) => {
   const [groupCode, setGroupCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
+  const groupCodeRef = useRef(null);
+
   const handleJoinGroup = async () => {
     if (!groupCode.trim()) {
       Alert.alert('Error', 'Please enter a valid group code.');
@@ -34,7 +38,6 @@ const JoinGroupScreen = ({ navigation }) => {
       console.log('Attempting to join group with ID:', groupName, 'and Code:', groupCode);
       await joinGroup(groupName.trim(), groupCode.trim());
 
-      // Show success alert and navigate back
       Alert.alert(
         'Success',
         'Successfully joined the group!',
@@ -46,14 +49,12 @@ const JoinGroupScreen = ({ navigation }) => {
         ]
       );
 
-      // Clear form
       setGroupName('');
       setGroupCode('');
 
     } catch (err) {
       console.error('Error joining group:', err);
-      
-      // Show error alert but stay on page
+
       Alert.alert(
         'Error',
         err.message || 'Failed to join group. Please try again.'
@@ -88,15 +89,23 @@ const JoinGroupScreen = ({ navigation }) => {
       padding: getSpacing.sm,
     },
     headerRight: {
-      width: 40, // Balance the header
+      width: 40,
     },
     title: {
       fontSize: getTypography.h3.fontSize,
       fontWeight: getTypography.h3.fontWeight,
       color: theme.text.primary,
     },
+    keyboardAvoidingView: {
+      flex: 1,
+    },
     content: {
       flex: 1,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      padding: getSpacing.lg,
+      paddingBottom: getSpacing.xl, // Extra padding for better spacing
     },
     description: {
       marginBottom: getSpacing.lg,
@@ -104,7 +113,6 @@ const JoinGroupScreen = ({ navigation }) => {
     subtitle: {
       fontSize: getTypography.body.fontSize,
       color: theme.text.secondary,
-      marginBottom: getSpacing.lg,
     },
     form: {
       marginBottom: getSpacing.lg,
@@ -124,7 +132,10 @@ const JoinGroupScreen = ({ navigation }) => {
       paddingVertical: getSpacing.md,
       fontSize: getTypography.body.fontSize,
       color: theme.text.primary,
-      marginBottom: getSpacing.lg,
+    },
+    bottomContainer: {
+      padding: getSpacing.lg,
+      backgroundColor: theme.background,
     },
     button: {
       backgroundColor: isJoining ? theme.text.tertiary : theme.primary,
@@ -144,7 +155,7 @@ const JoinGroupScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with back button */}
+      {/* Fixed Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
@@ -152,60 +163,89 @@ const JoinGroupScreen = ({ navigation }) => {
             onPress={() => navigation.goBack()}
             disabled={isJoining}
           >
-            <Ionicons 
-              name="arrow-back" 
-              size={24} 
-              color={isJoining ? theme.text.tertiary : theme.text.primary} 
+            <Ionicons
+              name="arrow-back"
+              size={24}
+              color={isJoining ? theme.text.tertiary : theme.text.primary}
             />
           </TouchableOpacity>
           <Text style={styles.title}>Join a Group</Text>
         </View>
         <View style={styles.headerRight} />
       </View>
-      
-      <ScrollView style={styles.content} contentContainerStyle={{ flexGrow: 1, padding: getSpacing.lg }}>
-        <View style={styles.description}>
-          <Text style={styles.subtitle}>Enter the group code to join an existing group.</Text>
-        </View>
-      
-      <View style={styles.form}>
-        <Text style={styles.label}>Group Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter group name"
-          placeholderTextColor={theme.text.secondary}
-          value={groupName}
-          onChangeText={setGroupName}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!isJoining}
-        />
-      </View>
 
-      <View style={styles.form}>
-        <Text style={styles.label}>Group Code</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter group code"
-          placeholderTextColor={theme.text.secondary}
-          value={groupCode}
-          onChangeText={setGroupCode}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!isJoining}
-        />
+      {/* Main Content Area with Better Keyboard Handling */}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 50} // Back to original offset
+      >
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            // Add extra space when keyboard is visible
+            contentInsetAdjustmentBehavior="automatic"
+          >
+            <View style={styles.description}>
+              <Text style={styles.subtitle}>
+                Enter the group code to join an existing group.
+              </Text>
+            </View>
+
+            <View style={styles.form}>
+              <Text style={styles.label}>Group Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter group name"
+                placeholderTextColor={theme.text.secondary}
+                value={groupName}
+                onChangeText={setGroupName}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isJoining}
+                returnKeyType="next"
+                onSubmitEditing={() => groupCodeRef.current?.focus()}
+              />
+            </View>
+
+            <View style={styles.form}>
+              <Text style={styles.label}>Group Code</Text>
+              <TextInput
+                ref={groupCodeRef}
+                style={styles.input}
+                placeholder="Enter group code"
+                placeholderTextColor={theme.text.secondary}
+                value={groupCode}
+                onChangeText={setGroupCode}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isJoining}
+                returnKeyType="join"
+                onSubmitEditing={handleJoinGroup}
+              />
+            </View>
+
+            {/* Add some extra spacing at the bottom to ensure inputs are visible */}
+            <View style={{ height: 100 }} />
+          </ScrollView>
+
+          {/* Footer stays visible */}
+          <View style={styles.bottomContainer}>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleJoinGroup}
+              disabled={isJoining}
+            >
+              {isJoining && <ActivityIndicator size="small" color="white" />}
+              <Text style={styles.buttonText}>
+                {isJoining ? 'Joining...' : 'Join Group'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <TouchableOpacity 
-          style={styles.button} 
-          onPress={handleJoinGroup} 
-          disabled={isJoining}
-        >
-          {isJoining && <ActivityIndicator size="small" color="white" />}
-          <Text style={styles.buttonText}>
-            {isJoining ? 'Joining...' : 'Join Group'}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

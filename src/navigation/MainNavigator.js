@@ -19,6 +19,8 @@ import ImportCalendarScreen from '../screens/ImportCalendarScreen';
 import CreateGroupScreen from '../screens/CreateGroupScreen';
 import JoinGroupScreen from '../screens/JoinGroupScreen';
 import MessagesScreen from '../screens/MessagesScreen';
+import CreateTaskScreen from '../screens/CreateTaskScreen';
+import DayScreen from '../screens/DayScreen';
 
 // Sub-screens
 import EventDetailsScreen from '../screens/EventDetailsScreen';
@@ -42,6 +44,7 @@ function TodayStackScreen() {
       <TodayStack.Screen name="CreateEvent" component={CreateEventScreen} />
       <TodayStack.Screen name="AddScreen" component={AddScreen} />
       <TodayStack.Screen name="Messages" component={MessagesScreen} />
+      <TodayStack.Screen name="CreateTask" component={CreateTaskScreen} />
     </TodayStack.Navigator>
   );
 }
@@ -55,6 +58,8 @@ function CalendarStackScreen() {
       <CalendarStack.Screen name="AddScreen" component={AddScreen} />
       <CalendarStack.Screen name="ImportCalendar" component={ImportCalendarScreen} />
       <CalendarStack.Screen name="Messages" component={MessagesScreen} />
+      <CalendarStack.Screen name="CreateTask" component={CreateTaskScreen} />
+      <CalendarStack.Screen name="DayScreen" component={DayScreen} />
     </CalendarStack.Navigator>
   );
 }
@@ -201,6 +206,7 @@ const MainNavigator = ({ onLogout }) => {
             EventDetails: 'today/event/:eventId',
             CreateEvent: 'today/create',
             Messages: 'today/messages',
+            CreateTask: 'today/create-task',
           },
         },
         Calendar: {
@@ -210,6 +216,7 @@ const MainNavigator = ({ onLogout }) => {
             CreateEvent: 'calendar/create',
             ImportCalendar: 'calendar/import',
             Messages: 'calendar/messages',
+            CreateTask: 'calendar/create-task',
           },
         },
         Groups: {

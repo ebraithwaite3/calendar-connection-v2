@@ -1,5 +1,5 @@
 // src/screens/TodayScreen.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,17 +9,18 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-} from 'react-native';
-import { useTheme } from '../contexts/ThemeContext';
-import { useData } from '../contexts/DataContext';
-import { Ionicons } from '@expo/vector-icons';
-import { useCalendarActions } from '../hooks';
-import { DateTime } from 'luxon';
-import EventCard from '../components/cards/EventCard/EventCard';
+} from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
+import { useData } from "../contexts/DataContext";
+import { Ionicons } from "@expo/vector-icons";
+import { useCalendarActions } from "../hooks";
+import { DateTime } from "luxon";
+import EventCard from "../components/cards/EventCard/EventCard";
 
 const TodayScreen = ({ navigation }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
-  const { user, calendars, tasks, groups, currentDate, setWorkingDate } = useData();
+  const { user, calendars, tasks, groups, currentDate, setWorkingDate } =
+    useData();
   const { syncCalendar } = useCalendarActions();
   const [syncing, setSyncing] = useState(false);
   const [syncingCalendars, setSyncingCalendars] = useState(new Set());
@@ -33,6 +34,10 @@ const TodayScreen = ({ navigation }) => {
     }
   }, []);
 
+  const handleImportCalendar = () => {
+    navigation.navigate("ImportCalendar");
+  };
+
   // build today's events
   const todaysEvents = useMemo(() => {
     if (!calendars || calendars.length === 0) return [];
@@ -41,15 +46,15 @@ const TodayScreen = ({ navigation }) => {
     const todayISO = currentDate;
 
     calendars.forEach((calendar) => {
-      if (calendar.events && typeof calendar.events === 'object') {
+      if (calendar.events && typeof calendar.events === "object") {
         Object.entries(calendar.events).forEach(([eventKey, event]) => {
           const eventStart = DateTime.fromISO(event.startTime);
           const eventEnd = DateTime.fromISO(event.endTime);
 
           if (!eventStart.isValid || !eventEnd.isValid) return;
 
-          const todayStart = DateTime.fromISO(todayISO).startOf('day');
-          const todayEnd = DateTime.fromISO(todayISO).endOf('day');
+          const todayStart = DateTime.fromISO(todayISO).startOf("day");
+          const todayEnd = DateTime.fromISO(todayISO).endOf("day");
 
           if (
             eventStart.toISODate() === todayISO ||
@@ -61,31 +66,36 @@ const TodayScreen = ({ navigation }) => {
               eventId: eventKey,
               calendarName: calendar.name,
               calendarColor: calendar.color || theme.primary,
-              eventType: event.eventType || 'event',
+              eventType: event.eventType || "event",
             });
           }
         });
       }
     });
 
-    events.sort((a, b) => DateTime.fromISO(a.startTime) - DateTime.fromISO(b.startTime));
+    events.sort(
+      (a, b) => DateTime.fromISO(a.startTime) - DateTime.fromISO(b.startTime)
+    );
     return events;
   }, [calendars, currentDate, theme.primary]);
 
   // sync handler
   const handleSyncAllCalendars = async () => {
     if (calendars.length === 0) {
-      Alert.alert('No Calendars', 'You need to import calendars before you can sync them.');
+      Alert.alert(
+        "No Calendars",
+        "You need to import calendars before you can sync them."
+      );
       return;
     }
 
     Alert.alert(
-      'Sync All Calendars',
+      "Sync All Calendars",
       `Are you sure you want to sync all ${calendars.length} calendar(s)?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Sync All',
+          text: "Sync All",
           onPress: async () => {
             setSyncing(true);
             let successCount = 0;
@@ -115,13 +125,21 @@ const TodayScreen = ({ navigation }) => {
               );
 
               if (errorCount === 0) {
-                Alert.alert('Sync Complete', `Successfully synced all ${successCount} calendar(s).`);
+                Alert.alert(
+                  "Sync Complete",
+                  `Successfully synced all ${successCount} calendar(s).`
+                );
               } else if (successCount === 0) {
-                Alert.alert('Sync Failed', `Failed to sync any calendars:\n\n${errors.join('\n')}`);
+                Alert.alert(
+                  "Sync Failed",
+                  `Failed to sync any calendars:\n\n${errors.join("\n")}`
+                );
               } else {
                 Alert.alert(
-                  'Sync Partially Complete',
-                  `Synced ${successCount}, ${errorCount} failed:\n\n${errors.join('\n')}`
+                  "Sync Partially Complete",
+                  `Synced ${successCount}, ${errorCount} failed:\n\n${errors.join(
+                    "\n"
+                  )}`
                 );
               }
             } finally {
@@ -148,9 +166,9 @@ const TodayScreen = ({ navigation }) => {
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
       backgroundColor: theme.surface,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
     },
     headerTitle: {
       fontSize: getTypography.h2.fontSize,
@@ -158,8 +176,8 @@ const TodayScreen = ({ navigation }) => {
       color: theme.text.primary,
     },
     headerActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: getSpacing.sm,
     },
     syncButton: {
@@ -167,9 +185,13 @@ const TodayScreen = ({ navigation }) => {
       width: 40,
       height: 40,
       borderRadius: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
       elevation: 2,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.2,
+      shadowRadius: 2,
     },
     syncButtonActive: {
       backgroundColor: theme.primary,
@@ -183,7 +205,7 @@ const TodayScreen = ({ navigation }) => {
       fontWeight: getTypography.h2.fontWeight,
       color: theme.text.primary,
       marginBottom: getSpacing.md,
-      textAlign: 'center',
+      textAlign: "center",
     },
     eventsContainer: {
       paddingVertical: getSpacing.md,
@@ -191,8 +213,8 @@ const TodayScreen = ({ navigation }) => {
     },
     emptyState: {
       flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
       padding: getSpacing.lg,
     },
     emptyTitle: {
@@ -205,13 +227,26 @@ const TodayScreen = ({ navigation }) => {
     emptySubtitle: {
       fontSize: getTypography.body.fontSize,
       color: theme.text.secondary,
-      textAlign: 'center',
+      textAlign: "center",
+    },
+    fab: {
+      backgroundColor: theme.primary,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: "center",
+      alignItems: "center",
+      elevation: 4,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
     },
   });
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    const firstName = user?.username?.split(' ')[0] || 'there';
+    const firstName = user?.username?.split(" ")[0] || "there";
 
     if (hour < 12) return `Good morning, ${firstName}!`;
     if (hour < 17) return `Good afternoon, ${firstName}!`;
@@ -224,28 +259,52 @@ const TodayScreen = ({ navigation }) => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Today</Text>
-          {calendars.length > 0 && (
+
+          <View style={styles.headerActions}>
+            {calendars.length > 0 && (
+              <TouchableOpacity
+                style={[
+                  styles.syncButton,
+                  (syncing || syncingCalendars.size > 0) &&
+                    styles.syncButtonActive,
+                ]}
+                onPress={handleSyncAllCalendars}
+                disabled={syncing || syncingCalendars.size > 0}
+              >
+                {syncing || syncingCalendars.size > 0 ? (
+                  <ActivityIndicator size="small" color={theme.text.inverse} />
+                ) : (
+                  <Ionicons
+                    name="sync"
+                    size={20}
+                    color={theme.button.secondaryText}
+                  />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* Add Calendar Button */}
             <TouchableOpacity
-              style={[styles.syncButton, (syncing || syncingCalendars.size > 0) && styles.syncButtonActive]}
-              onPress={handleSyncAllCalendars}
-              disabled={syncing || syncingCalendars.size > 0}
+              style={styles.fab}
+              onPress={handleImportCalendar}
+              disabled={syncing}
             >
-              {syncing || syncingCalendars.size > 0 ? (
-                <ActivityIndicator size="small" color={theme.text.inverse} />
-              ) : (
-                <Ionicons name="sync" size={20} color={theme.button.secondaryText} />
-              )}
+              <Ionicons name="add" size={24} color={theme.text.inverse} />
             </TouchableOpacity>
-          )}
+          </View>
         </View>
 
         {/* Content */}
         <View style={styles.content}>
-          <Text style={styles.greeting}>{getGreeting()}</Text>
+          {/* <Text style={styles.greeting}>{getGreeting()}</Text> */}
 
           {todaysEvents.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={64} color={theme.text.tertiary} />
+              <Ionicons
+                name="calendar-outline"
+                size={64}
+                color={theme.text.tertiary}
+              />
               <Text style={styles.emptyTitle}>No Events Today</Text>
               <Text style={styles.emptySubtitle}>
                 Enjoy your free day! Sync your calendars to see upcoming events.
@@ -254,7 +313,9 @@ const TodayScreen = ({ navigation }) => {
           ) : (
             <FlatList
               data={todaysEvents}
-              keyExtractor={(event, index) => `${event.calendarId}-${event.eventId}-${index}`}
+              keyExtractor={(event, index) =>
+                `${event.calendarId}-${event.eventId}-${index}`
+              }
               renderItem={({ item }) => (
                 <EventCard
                   event={item}
@@ -263,11 +324,10 @@ const TodayScreen = ({ navigation }) => {
                   showCalendarName
                   tasks={tasks}
                   onPress={(event) =>
-                    navigation.navigate('EventDetails', 
-                      { 
-                        eventId: event.eventId, 
-                        calendarId: event.calendarId 
-                      })
+                    navigation.navigate("EventDetails", {
+                      eventId: event.eventId,
+                      calendarId: event.calendarId,
+                    })
                   }
                 />
               )}
