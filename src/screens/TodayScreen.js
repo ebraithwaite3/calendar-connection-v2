@@ -1,5 +1,6 @@
 // src/screens/TodayScreen.js
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -26,13 +27,17 @@ const TodayScreen = ({ navigation }) => {
   const [syncingCalendars, setSyncingCalendars] = useState(new Set());
   console.log("Tasks in TodayScreen:", tasks);
 
-  // keep currentDate synced with "today"
-  useEffect(() => {
-    const today = DateTime.now().toISODate();
-    if (currentDate !== today) {
-      setWorkingDate(today);
-    }
-  }, []);
+  // keep currentDate synced with "today" whenever screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      console.log("TodayScreen focused - setting date to today");
+      const today = DateTime.now().toISODate();
+      console.log("Today's date:", today);
+      console.log("Current context date:", currentDate);
+      console.log("About to set working date to:", today); // Add this log
+      setWorkingDate(today); // Make sure this is 'today', not 'currentDate'
+    }, [setWorkingDate, currentDate])
+  );
 
   const handleImportCalendar = () => {
     navigation.navigate("ImportCalendar");

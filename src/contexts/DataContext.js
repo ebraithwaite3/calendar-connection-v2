@@ -378,9 +378,8 @@ export const DataProvider = ({ children }) => {
 
   // ===== HELPER FUNCTIONS =====
   const setWorkingDate = useCallback((date) => {
-    const isoDate = DateTime.fromJSDate(date).toISODate();
-    setCurrentDate(isoDate);
-    console.log("📅 Set working date:", isoDate);
+    setCurrentDate(date);
+    console.log("📅 Set working date:", date);
   }, []);
 
   const getCalendarById = useCallback((calendarId) => {
@@ -398,6 +397,27 @@ const unreadMessagesCount = useMemo(() => {
 const messagesCount = useMemo(() => {
   return messages.messages?.length || 0;
 }, [messages]);
+
+// Gather the last sync times of all calendars (and filter out any that have been synced int he last 24 hours, use Luxon for date handling)
+// I need to return enough info to also potentially be able to sync that/those calendars
+const calendarsThatNeedToSync = useMemo(() => {
+  const now = DateTime.now();
+  return calendars
+    .map(cal => ({
+      calendarId: cal.calendarId,
+      name: cal.name,
+      lastSynced: cal.lastSynced ? DateTime.fromISO(cal.lastSynced) : null,
+    }))
+    .filter(cal => cal.lastSynced) // Only keep those with a lastSynced time
+    .map(cal => ({
+      ...cal,
+      hoursSinceLastSync: now.diff(cal.lastSynced, 'hours').hours,
+    }))
+    .filter(cal => cal.hoursSinceLastSync >= 24) // Only keep those not synced in the last 24 hours
+    .sort((a, b) => b.hoursSinceLastSync - a.hoursSinceLastSync); // Sort by longest time since last sync
+}, [calendars]);
+
+console.log("⏱️ Calendars Not Synced in last 24 h:", calendarsThatNeedToSync);
 
   // ===== CONTEXT VALUE =====
   const value = useMemo(() => ({

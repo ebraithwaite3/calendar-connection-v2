@@ -137,19 +137,30 @@ function TabNavigator({ initialRoute, theme, onLogout }) {
           },
         })}
       >
-        <Tab.Screen 
-          name="Today" 
-          component={TodayStackScreen}
-          options={{
-            tabBarLabel: 'Today',
-          }}
-        />
+        <Tab.Screen
+  name="Today"
+  component={TodayStackScreen}
+  options={{ tabBarLabel: 'Today' }}
+  listeners={({ navigation }) => ({
+    tabPress: () => {
+      console.log("Navigating to TodayHome");
+      navigation.navigate('Today', { screen: 'TodayHome' });
+    },
+  })}
+/>
+
         <Tab.Screen 
           name="Calendar" 
           component={CalendarStackScreen}
           options={{
             tabBarLabel: 'Calendars',
           }}
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              console.log("Navigating to CalendarHome");
+              navigation.navigate('Calendar', { screen: 'CalendarHome' });
+            },
+          })}
         />
         <Tab.Screen 
           name="Groups" 
@@ -157,6 +168,11 @@ function TabNavigator({ initialRoute, theme, onLogout }) {
           options={{
             tabBarLabel: 'Groups',
           }}
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              navigation.navigate('Groups', { screen: 'GroupsHome' });
+            },
+          })}
         />
         <Tab.Screen
           name="Preferences"
@@ -164,6 +180,11 @@ function TabNavigator({ initialRoute, theme, onLogout }) {
           options={{
             tabBarLabel: 'Preferences',
           }}
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              navigation.navigate('Preferences', { screen: 'PreferencesHome' });
+            },
+          })}
         />
       </Tab.Navigator>
     </>
@@ -174,23 +195,30 @@ const MainNavigator = ({ onLogout }) => {
   const { theme, isDarkMode } = useTheme();
   const [initialRoute, setInitialRoute] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const { loading } = useData();
+  const { loading, user } = useData();
 
+  // Get the default page from the user doc
+  // in preferences.defaultLoadingPage
   useEffect(() => {
-    if (loading) return;
-    const getDefaultPage = async () => {
-      const defaultPage = await AsyncStorage.getItem('defaultLoadingPage');
-      console.log('Default loading page from storage:', defaultPage);
-      
-      if (defaultPage && (defaultPage === 'Today' || defaultPage === 'Calendar')) {
-        setInitialRoute(defaultPage);
-      } else {
-        setInitialRoute('Today');
+    const fetchInitialRoute = async () => {
+      try {
+        if (user && user.preferences && user.preferences.defaultLoadingPage) {
+          setInitialRoute(user.preferences.defaultLoadingPage);
+        } else {
+          // Fallback to AsyncStorage if user data isn't available yet
+          const storedRoute = await AsyncStorage.getItem('defaultLoadingPage');
+          setInitialRoute(storedRoute || 'Today');
+        }
+      } catch (error) {
+        console.error('Error fetching initial route:', error);
+        setInitialRoute('Today'); // Fallback to Today on error
+      } finally {
+        setIsReady(true);
       }
-      setIsReady(true);
     };
-    getDefaultPage();
-  }, [loading]);
+
+    fetchInitialRoute();
+  }, [user]);
 
   if (loading || !isReady) {
     return <LoadingScreen />;

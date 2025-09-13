@@ -80,6 +80,11 @@ const SlideOutMenu = ({
     navigation.navigate('Messages');
   };
 
+  const handlePreferencesNavigation = () => {
+    onClose();
+    navigation.navigate('Preferences');
+  }
+
   return (
     <Modal
       animationType="slide"
@@ -114,11 +119,10 @@ const SlideOutMenu = ({
 
               {/* Settings */}
               <TouchableOpacity style={styles.menuItem} onPress={() => {
-                console.log('Settings clicked');
-                onClose();
+                handlePreferencesNavigation();
               }}>
                 <Text style={styles.menuItemIcon}>⚙️</Text>
-                <Text style={styles.menuItemText}>Settings</Text>
+                <Text style={styles.menuItemText}>Preferences</Text>
               </TouchableOpacity>
 
               {/* Logout */}

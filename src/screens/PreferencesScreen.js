@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Switch } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../contexts/ThemeContext";
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -7,33 +8,28 @@ import { updateUserDoc } from "../services/firestoreService";
 
 const PreferencesScreen = () => {
   const { theme, getSpacing, getTypography } = useTheme();
-    const { db } = useAuth(); // Assumed db is available from useAuth
-  const { preferences, user } = useData(); // Assumed db and user are available from useData
+  const { db } = useAuth();
+  const { preferences, user } = useData();
   const [updatedPreferences, setUpdatedPreferences] = useState(preferences);
   const [hasChanges, setHasChanges] = useState(false);
+  const [notificationDetailsOpen, setNotificationDetailsOpen] = useState(false);
+
   console.log("DB In preferencesScreen:", db, "User:", user ? user.email || user.username : 'No user', "Preferences:", preferences);
 
-    // This useEffect synchronizes the local state with Firestore data
-    useEffect(() => {
-        setUpdatedPreferences(preferences);
-      }, [preferences]);
+  // This useEffect synchronizes the local state with Firestore data
+  useEffect(() => {
+    setUpdatedPreferences(preferences);
+  }, [preferences]);
 
   // Effect to check if preferences have been modified
   useEffect(() => {
-    // We use JSON.stringify for a deep comparison of the two objects
-    const changesMade =
-      JSON.stringify(preferences) !== JSON.stringify(updatedPreferences);
+    const changesMade = JSON.stringify(preferences) !== JSON.stringify(updatedPreferences);
     setHasChanges(changesMade);
   }, [preferences, updatedPreferences]);
 
   const defaultLoadingPageOptions = [
     { label: "Today", value: "Today" },
     { label: "Calendar", value: "Calendar" },
-  ];
-
-  const defaultCalendarViewOptions = [
-    { label: "Month", value: "month" },
-    { label: "Week", value: "week" },
   ];
 
   // Handler for radio button selection
@@ -44,11 +40,57 @@ const PreferencesScreen = () => {
     }));
   };
 
-  // Handler for toggle switch
-  const handleToggleChange = (value) => {
+  // Handler for main notifications toggle
+  const handleNotificationsToggle = (value) => {
+    setUpdatedPreferences((prev) => {
+      const newPrefs = {
+        ...prev,
+        notifications: value,
+      };
+
+      if (!value) {
+        // If turning notifications off, disable all specific notifications
+        newPrefs.notifyFor = {
+          ...prev.notifyFor,
+          groupActivity: false,
+          newAssignments: false,
+          updatedAssignments: false,
+        };
+        setNotificationDetailsOpen(false);
+      } else {
+        // If turning notifications on, restore to original values from Firestore
+        // If original was off, default all to true
+        if (preferences.notifications) {
+          // Original was on, restore original specific settings
+          newPrefs.notifyFor = {
+            ...prev.notifyFor,
+            groupActivity: preferences.notifyFor?.groupActivity || false,
+            newAssignments: preferences.notifyFor?.newAssignments || false,
+            updatedAssignments: preferences.notifyFor?.updatedAssignments || false,
+          };
+        } else {
+          // Original was off, default all to true
+          newPrefs.notifyFor = {
+            ...prev.notifyFor,
+            groupActivity: true,
+            newAssignments: true,
+            updatedAssignments: true,
+          };
+        }
+      }
+
+      return newPrefs;
+    });
+  };
+
+  // Handler for specific notification toggles
+  const handleSpecificNotificationToggle = (key, value) => {
     setUpdatedPreferences((prev) => ({
       ...prev,
-      notifications: value,
+      notifyFor: {
+        ...prev.notifyFor,
+        [key]: value,
+      },
     }));
   };
 
@@ -61,21 +103,17 @@ const PreferencesScreen = () => {
     console.log("Saving preferences:", updatedPreferences, "With db and user:", db, user.userId);
 
     try {
-      // Pass a single object with the key 'preferences' to update the nested map
       await updateUserDoc(db, user.userId, { preferences: updatedPreferences });
       console.log("User preferences updated successfully!");
-      // The DataContext will automatically update from the Firestore listener,
-      // which will then reset the local state and disable the buttons.
-      // So no need to call setHasChanges(false) or setUpdatedPreferences(preferences) here.
     } catch (error) {
       console.error("Failed to save preferences:", error);
-      // Optional: Show an error message to the user
     }
   };
 
   // Handler for the "Cancel" button
   const handleCancel = () => {
     setUpdatedPreferences(preferences);
+    setNotificationDetailsOpen(false);
   };
 
   const styles = StyleSheet.create({
@@ -136,6 +174,40 @@ const PreferencesScreen = () => {
       ...getTypography.body,
       color: theme.text.primary,
     },
+    notificationMainRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      width: "100%",
+    },
+    notificationDetailsButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      paddingVertical: getSpacing.sm,
+      marginTop: getSpacing.sm,
+    },
+    notificationDetailsText: {
+      ...getTypography.body,
+      color: theme.text.secondary,
+    },
+    notificationDetailsList: {
+      marginTop: getSpacing.md,
+      paddingLeft: getSpacing.md,
+      borderLeftWidth: 2,
+      borderLeftColor: theme.border,
+    },
+    notificationDetailItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: getSpacing.sm,
+    },
+    notificationDetailLabel: {
+      ...getTypography.body,
+      color: theme.text.primary,
+    },
     buttonContainer: {
       flexDirection: "row",
       width: "100%",
@@ -189,6 +261,12 @@ const PreferencesScreen = () => {
     </TouchableOpacity>
   );
 
+  const notificationDetails = [
+    { key: 'groupActivity', label: 'Group Activity' },
+    { key: 'newAssignments', label: 'New Assignments' },
+    { key: 'updatedAssignments', label: 'Updated Assignments' },
+  ];
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Preferences</Text>
@@ -209,39 +287,55 @@ const PreferencesScreen = () => {
         </View>
       </View>
 
-      {/* Default Calendar View Setting */}
-      <View style={styles.settingContainer}>
-        <Text style={styles.settingTitle}>Default Calendar View</Text>
-        <View style={styles.optionsContainer}>
-          {defaultCalendarViewOptions.map((option) => (
-            <RadioButton
-              key={option.value}
-              label={option.label}
-              value={option.value}
-              selectedValue={updatedPreferences.defaultCalendarView}
-              onSelect={(val) => handleRadioChange("defaultCalendarView", val)}
-            />
-          ))}
-        </View>
-      </View>
-
       {/* Notifications Setting */}
-      <View
-        style={[
-          styles.settingContainer,
-          styles.optionsContainer,
-          { justifyContent: "space-between" },
-        ]}
-      >
-        <Text style={styles.settingTitle}>Notifications</Text>
-        <Switch
-          onValueChange={handleToggleChange}
-          value={updatedPreferences.notifications}
-          trackColor={{ false: theme.border, true: theme.primary }}
-          thumbColor={
-            updatedPreferences.notifications ? theme.text.inverse : theme.border
-          }
-        />
+      <View style={styles.settingContainer}>
+        <View style={styles.notificationMainRow}>
+          <Text style={styles.settingTitle}>Notifications</Text>
+          <Switch
+            onValueChange={handleNotificationsToggle}
+            value={updatedPreferences.notifications}
+            trackColor={{ false: theme.border, true: theme.primary }}
+            thumbColor={
+              updatedPreferences.notifications ? theme.text.inverse : theme.border
+            }
+          />
+        </View>
+
+        {/* Notification Details Toggle */}
+        {updatedPreferences.notifications && (
+          <TouchableOpacity
+            style={styles.notificationDetailsButton}
+            onPress={() => setNotificationDetailsOpen(!notificationDetailsOpen)}
+          >
+            <Text style={styles.notificationDetailsText}>
+              Edit Specific Notifications
+            </Text>
+            <Ionicons
+              name={notificationDetailsOpen ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={theme.text.secondary}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Expanded Notification Details */}
+        {updatedPreferences.notifications && notificationDetailsOpen && (
+          <View style={styles.notificationDetailsList}>
+            {notificationDetails.map((item) => (
+              <View key={item.key} style={styles.notificationDetailItem}>
+                <Text style={styles.notificationDetailLabel}>{item.label}</Text>
+                <Switch
+                  onValueChange={(value) => handleSpecificNotificationToggle(item.key, value)}
+                  value={updatedPreferences.notifyFor?.[item.key] || false}
+                  trackColor={{ false: theme.border, true: theme.primary }}
+                  thumbColor={
+                    updatedPreferences.notifyFor?.[item.key] ? theme.text.inverse : theme.border
+                  }
+                />
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Action Buttons, if there are changes */}

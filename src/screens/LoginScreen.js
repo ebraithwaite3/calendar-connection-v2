@@ -11,11 +11,8 @@ import {
   ScrollView,
   Platform,
 } from "react-native";
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from "../contexts/AuthContext";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-// You might need to install and link this library
-// npm install react-native-vector-icons
-// react-native link react-native-vector-icons
 import Icon from "react-native-vector-icons/Ionicons";
 
 const LoginScreen = () => {
@@ -31,21 +28,12 @@ const LoginScreen = () => {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
 
-  const { login, signup } = useAuth();
+  const { login, signup, auth } = useAuth();
 
   const emailRef = useRef(null);
   const usernameRef = useRef(null);
   const passwordRef = useRef(null);
   const confirmPasswordRef = useRef(null);
-
-  const clearLocalStorage = async () => {
-    try {
-      await AsyncStorage.clear();
-      console.log("Local storage cleared");
-    } catch (error) {
-      console.error("Error clearing local storage:", error);
-    }
-  };
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -96,6 +84,38 @@ const LoginScreen = () => {
       }
 
       Alert.alert("Authentication Error", errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert("Error", "Please enter your email address first");
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      await sendPasswordResetEmail(auth, email);
+      Alert.alert("Success", "Password reset email sent! Check your inbox and spam folder.");
+    } catch (error) {
+      console.error("Password reset error:", error);
+      let errorMessage = "Failed to send reset email";
+      
+      switch (error.code) {
+        case "auth/user-not-found":
+          errorMessage = "No account found with this email address";
+          break;
+        case "auth/invalid-email":
+          errorMessage = "Invalid email address";
+          break;
+        default:
+          errorMessage = error.message;
+      }
+      
+      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -166,7 +186,7 @@ const LoginScreen = () => {
                   placeholder="Password"
                   value={password}
                   onChangeText={setPassword}
-                  secureTextEntry={!passwordVisible} // Use state here
+                  secureTextEntry={!passwordVisible}
                   editable={!loading}
                   returnKeyType={isLogin ? "done" : "next"}
                   onSubmitEditing={() =>
@@ -179,7 +199,7 @@ const LoginScreen = () => {
                   onPress={() => setPasswordVisible(!passwordVisible)}
                 >
                   <Icon
-                    name={passwordVisible ? "eye-off-outline" : "eye-outline"} // Change icon based on state
+                    name={passwordVisible ? "eye-off-outline" : "eye-outline"}
                     size={24}
                     color="#6b7280"
                   />
@@ -187,7 +207,6 @@ const LoginScreen = () => {
               </View>
 
               {!isLogin && (
-                // Confirm Password Input with Toggle
                 <View style={styles.passwordInputContainer}>
                   <TextInput
                     ref={confirmPasswordRef}
@@ -195,7 +214,7 @@ const LoginScreen = () => {
                     placeholder="Confirm Password"
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
-                    secureTextEntry={!confirmPasswordVisible} // Use state here
+                    secureTextEntry={!confirmPasswordVisible}
                     editable={!loading}
                     returnKeyType="done"
                     onSubmitEditing={handleAuth}
@@ -206,7 +225,7 @@ const LoginScreen = () => {
                     onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
                   >
                     <Icon
-                      name={confirmPasswordVisible ? "eye-off-outline" : "eye-outline"} // Change icon based on state
+                      name={confirmPasswordVisible ? "eye-off-outline" : "eye-outline"}
                       size={24}
                       color="#6b7280"
                     />
@@ -250,6 +269,19 @@ const LoginScreen = () => {
                   {loading ? "Loading..." : isLogin ? "Sign In" : "Sign Up"}
                 </Text>
               </TouchableOpacity>
+
+              {/* Forgot Password Link - only show on login */}
+              {isLogin && (
+                <TouchableOpacity
+                  style={styles.forgotPasswordButton}
+                  onPress={handleForgotPassword}
+                  disabled={loading}
+                >
+                  <Text style={[styles.forgotPasswordText, loading && styles.disabledText]}>
+                    Forgot Password?
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={styles.switchButton}
@@ -316,7 +348,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 16,
   },
-  // New styles for password input with icon
   passwordInputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -340,7 +371,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 16,
   },
   authButtonText: {
     color: "white",
@@ -349,6 +380,15 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: "#9ca3af",
+  },
+  forgotPasswordButton: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  forgotPasswordText: {
+    color: "#3b82f6",
+    fontSize: 16,
+    textDecorationLine: "underline",
   },
   switchButton: {
     alignItems: "center",
