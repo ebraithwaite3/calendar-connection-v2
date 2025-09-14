@@ -3,6 +3,9 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { initializeAuth, initializeFirestore } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteDoc } from 'firebase/firestore';
+import { getDocumentsByField, updateDocument } from '../services/firestoreService';
+import { addMessageToUser } from '../services/messageService';
+import { DateTime } from 'luxon';
 
 
 const AuthContext = createContext();
@@ -75,7 +78,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Helper function to create user document in Firestore
-  const createUserDocument = async (user, username, notifications, additionalData = {}) => {
+  const createUserDocument = async (user, username, notifications, groupInvites = [], additionalData = {}) => {
     if (!user || !db) return;
     
     try {
@@ -93,6 +96,7 @@ export const AuthProvider = ({ children }) => {
           userId: user.uid,
           email: user.email,
           username: username,
+          groupInvites: groupInvites,
           groups: [],
           calendars: [],
           createdAt: now,
@@ -158,13 +162,76 @@ export const AuthProvider = ({ children }) => {
     
     // ATOMIC OPERATIONS: Create user document and message document
     try {
-      // Step 2: Create user document
-      await createUserDocument(result.user, username, notifications);
+      // Step 2: Check for stored invites before creating user document
+      let pendingInvites = [];
+      let adminDocId = null;
+      
+      const adminQuery = await getDocumentsByField("admin", "type", "storedInvites");
+      if (adminQuery.length > 0) {
+        const adminDoc = adminQuery[0];
+        adminDocId = adminDoc.id;
+        
+        // Find invites for this email
+        const userInvites = (adminDoc.invites || []).filter(
+          invite => invite.email.toLowerCase() === email.toLowerCase()
+        );
+        
+        if (userInvites.length > 0) {
+          console.log(`Found ${userInvites.length} stored invite(s) for ${email}`);
+          
+          // Convert stored invites to groupInvites format
+          pendingInvites = userInvites.map(invite => ({
+            groupId: invite.groupId,
+            groupName: invite.groupName,
+            inviteCode: invite.inviteCode,
+            role: invite.role,
+            inviterUserId: invite.inviterUserId || 'unknown', // fallback if missing
+            inviterName: invite.inviterName,
+            invitedAt: invite.invitedAt || DateTime.now().toISO(),
+            status: 'pending'
+          }));
+          
+          // Remove these invites from the admin doc
+          const remainingInvites = (adminDoc.invites || []).filter(
+            invite => invite.email.toLowerCase() !== email.toLowerCase()
+          );
+          
+          await updateDocument("admin", adminDocId, {
+            invites: remainingInvites,
+            updatedAt: DateTime.now().toISO(),
+          });
+          
+          console.log(`Moved ${userInvites.length} invite(s) from admin storage to user document`);
+        }
+      }
+  
+      // Step 3: Create user document (now with pending invites)
+      await createUserDocument(result.user, username, notifications, pendingInvites);
       console.log('✅ User document created');
   
-      // Step 3: Create message document
+      // Step 4: Create message document
       await createMessageDoc(result.user.uid);
       console.log('✅ Message document created');
+      
+      // Step 5: Send welcome messages for any pending invites
+      if (pendingInvites.length > 0) {
+        for (const invite of pendingInvites) {
+          const messageText = `Welcome! You have a pending invitation to join ${invite.groupName} from ${invite.inviterName}. Check your Groups section to accept or decline.`;
+          
+          const sendingUserInfo = {
+            userId: 'system',
+            username: 'System',
+            groupName: invite.groupName,
+            screenForNavigation: {
+              screen: 'Groups'
+            }
+          };
+          
+          await addMessageToUser(result.user.uid, sendingUserInfo, messageText);
+        }
+        
+        console.log(`✅ Sent ${pendingInvites.length} welcome message(s) for pending invites`);
+      }
   
     } catch (error) {
       console.error('❌ Atomic operation failed:', error);

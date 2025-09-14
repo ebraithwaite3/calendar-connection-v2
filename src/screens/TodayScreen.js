@@ -17,14 +17,24 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCalendarActions } from "../hooks";
 import { DateTime } from "luxon";
 import EventCard from "../components/cards/EventCard/EventCard";
+import LoadingScreen from "../components/LoadingScreen";
 
 const TodayScreen = ({ navigation }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
-  const { user, calendars, tasks, groups, currentDate, setWorkingDate } =
-    useData();
+  const { 
+    user, 
+    calendars, 
+    tasks, 
+    groups, 
+    currentDate, 
+    setWorkingDate, 
+    loading, 
+    calendarsLoading 
+  } = useData();
   const { syncCalendar } = useCalendarActions();
   const [syncing, setSyncing] = useState(false);
   const [syncingCalendars, setSyncingCalendars] = useState(new Set());
+  const [dataSettled, setDataSettled] = useState(false); // new state to track data settling
   console.log("Tasks in TodayScreen:", tasks);
 
   // keep currentDate synced with "today" whenever screen is focused
@@ -34,14 +44,33 @@ const TodayScreen = ({ navigation }) => {
       const today = DateTime.now().toISODate();
       console.log("Today's date:", today);
       console.log("Current context date:", currentDate);
-      console.log("About to set working date to:", today); // Add this log
-      setWorkingDate(today); // Make sure this is 'today', not 'currentDate'
+      console.log("About to set working date to:", today);
+      setWorkingDate(today);
     }, [setWorkingDate, currentDate])
   );
 
   const handleImportCalendar = () => {
     navigation.navigate("ImportCalendar");
   };
+
+  // Loading state check to prevent flicker
+  const hasConfiguredCalendars = user?.calendars && user.calendars.length > 0;
+  const calendarsHaveEvents = calendars.some(cal => cal.events && Object.keys(cal.events).length > 0);
+  const isDataLoading = loading || calendarsLoading || (hasConfiguredCalendars && calendars.length === 0) || !dataSettled || (hasConfiguredCalendars && !calendarsHaveEvents);
+
+  // Effect to handle data settling
+  useEffect(() => {
+    if (!loading && !calendarsLoading && (!hasConfiguredCalendars || calendarsHaveEvents)) {
+      // Add a small delay to let all state updates complete
+      const timer = setTimeout(() => {
+        setDataSettled(true);
+      }, 100); // 100ms delay
+      
+      return () => clearTimeout(timer);
+    } else {
+      setDataSettled(false);
+    }
+  }, [loading, calendarsLoading, hasConfiguredCalendars, calendarsHaveEvents]);
 
   // build today's events
   const todaysEvents = useMemo(() => {
@@ -258,6 +287,11 @@ const TodayScreen = ({ navigation }) => {
     return `Good evening, ${firstName}!`;
   };
 
+  // Check if we should show loading screen
+  if (isDataLoading) {
+    return <LoadingScreen />;
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.safeArea}>
@@ -289,13 +323,35 @@ const TodayScreen = ({ navigation }) => {
             )}
 
             {/* Add Calendar Button */}
-            <TouchableOpacity
-              style={styles.fab}
-              onPress={handleImportCalendar}
-              disabled={syncing}
-            >
-              <Ionicons name="add" size={24} color={theme.text.inverse} />
-            </TouchableOpacity>
+            {/* Add Calendar Button */}
+<TouchableOpacity
+  style={[
+    styles.fab,
+    calendars?.length === 0 && {
+      width: 'auto',
+      height: 'auto',
+      paddingHorizontal: getSpacing.lg,
+      paddingVertical: getSpacing.md,
+      borderRadius: getBorderRadius.lg,
+    }
+  ]}
+  onPress={handleImportCalendar}
+  disabled={syncing}
+>
+  {calendars?.length === 0 ? (
+    <Text
+      style={{
+        color: theme.text.inverse,
+        fontSize: getTypography.body.fontSize,
+        fontWeight: "bold",
+      }}
+    >
+      Import a Calendar
+    </Text>
+  ) : (
+    <Ionicons name="add" size={24} color={theme.text.inverse} />
+  )}
+</TouchableOpacity>
           </View>
         </View>
 
@@ -312,7 +368,9 @@ const TodayScreen = ({ navigation }) => {
               />
               <Text style={styles.emptyTitle}>No Events Today</Text>
               <Text style={styles.emptySubtitle}>
-                Enjoy your free day! Sync your calendars to see upcoming events.
+                {hasConfiguredCalendars 
+                  ? "Enjoy your free day! Sync your calendars to see upcoming events."
+                  : "Add calendars to see your events here."}
               </Text>
             </View>
           ) : (

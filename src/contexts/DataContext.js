@@ -41,6 +41,11 @@ export const DataProvider = ({ children }) => {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
 
+  // Auto-sync states
+  const [autoSyncInProgress, setAutoSyncInProgress] = useState(false);
+  const [syncingCalendarIds, setSyncingCalendarIds] = useState(new Set());
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+
   console.log("📊 DataContext State:", { 
     loading, 
     userLoaded: !!user, 
@@ -390,34 +395,114 @@ export const DataProvider = ({ children }) => {
     return calendars.filter(cal => cal.type === type);
   }, [calendars]);
 
-const unreadMessagesCount = useMemo(() => {
-  return messages.messages?.filter(m => !m.read).length || 0;
-}, [messages]);
+  const unreadMessagesCount = useMemo(() => {
+    return messages.messages?.filter(m => !m.read).length || 0;
+  }, [messages]);
 
-const messagesCount = useMemo(() => {
-  return messages.messages?.length || 0;
-}, [messages]);
+  const unacceptedChecklistsCount = useMemo(() => {
+    const checklists = user?.savedChecklists || [];
+    return checklists.filter(cl => cl.accepted === false).length;
+  }, [user]);
 
-// Gather the last sync times of all calendars (and filter out any that have been synced int he last 24 hours, use Luxon for date handling)
-// I need to return enough info to also potentially be able to sync that/those calendars
-const calendarsThatNeedToSync = useMemo(() => {
-  const now = DateTime.now();
-  return calendars
-    .map(cal => ({
-      calendarId: cal.calendarId,
-      name: cal.name,
-      lastSynced: cal.lastSynced ? DateTime.fromISO(cal.lastSynced) : null,
-    }))
-    .filter(cal => cal.lastSynced) // Only keep those with a lastSynced time
-    .map(cal => ({
-      ...cal,
-      hoursSinceLastSync: now.diff(cal.lastSynced, 'hours').hours,
-    }))
-    .filter(cal => cal.hoursSinceLastSync >= 24) // Only keep those not synced in the last 24 hours
-    .sort((a, b) => b.hoursSinceLastSync - a.hoursSinceLastSync); // Sort by longest time since last sync
-}, [calendars]);
+  const messagesCount = useMemo(() => {
+    return messages.messages?.length || 0;
+  }, [messages]);
 
-console.log("⏱️ Calendars Not Synced in last 24 h:", calendarsThatNeedToSync);
+  // Gather the last sync times of all calendars (and filter out any that have been synced in the last 24 hours, use Luxon for date handling)
+  // I need to return enough info to also potentially be able to sync that/those calendars
+  const calendarsThatNeedToSync = useMemo(() => {
+    const now = DateTime.now();
+    return calendars
+      .map(cal => ({
+        calendarId: cal.calendarId,
+        name: cal.name,
+        lastSynced: cal.lastSynced ? DateTime.fromISO(cal.lastSynced) : null,
+      }))
+      .filter(cal => cal.lastSynced) // Only keep those with a lastSynced time
+      .map(cal => ({
+        ...cal,
+        hoursSinceLastSync: now.diff(cal.lastSynced, 'hours').hours,
+      }))
+      .filter(cal => cal.hoursSinceLastSync >= 24) // Only keep those not synced in the last 24 hours
+      .sort((a, b) => b.hoursSinceLastSync - a.hoursSinceLastSync); // Sort by longest time since last sync
+  }, [calendars]);
+
+  console.log("⏱️ Calendars Not Synced in last 24 h:", calendarsThatNeedToSync);
+
+  // ===== AUTO-SYNC FUNCTIONALITY =====
+  // Auto-sync function using the same pattern as your CalendarScreen
+  const performAutoSync = useCallback(async () => {
+    if (autoSyncInProgress || calendarsThatNeedToSync.length === 0) {
+      return { successCount: 0, errorCount: 0, errors: [] };
+    }
+
+    console.log("🔄 Starting auto-sync for", calendarsThatNeedToSync.length, "outdated calendars");
+    setAutoSyncInProgress(true);
+    
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    try {
+      const syncPromises = calendarsThatNeedToSync.map(async (calendarInfo) => {
+        setSyncingCalendarIds(prev => new Set([...prev, calendarInfo.calendarId]));
+        
+        try {
+          await syncCalendar(calendarInfo.calendarId);
+          successCount++;
+          console.log(`✅ Auto-synced: ${calendarInfo.name}`);
+        } catch (error) {
+          errorCount++;
+          errors.push(`${calendarInfo.name}: ${error.message}`);
+          console.error(`❌ Auto-sync failed for ${calendarInfo.name}:`, error);
+        } finally {
+          setSyncingCalendarIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(calendarInfo.calendarId);
+            return newSet;
+          });
+        }
+      });
+
+      await Promise.all(syncPromises);
+
+      console.log(`🔄 Auto-sync complete: ${successCount} success, ${errorCount} failed`);
+      
+      if (errorCount > 0) {
+        console.warn("Auto-sync errors:", errors);
+      }
+      
+    } catch (error) {
+      console.error('Auto-sync error:', error);
+    } finally {
+      setAutoSyncInProgress(false);
+      setSyncingCalendarIds(new Set());
+    }
+
+    return { successCount, errorCount, errors };
+  }, [calendarsThatNeedToSync, syncCalendar, autoSyncInProgress]);
+
+  // Manual trigger function
+  const triggerManualSync = useCallback(async () => {
+    if (calendarsThatNeedToSync.length === 0) {
+      console.log("No calendars need syncing");
+      return { successCount: 0, errorCount: 0, errors: [] };
+    }
+    
+    return await performAutoSync();
+  }, [performAutoSync, calendarsThatNeedToSync]);
+
+  // Auto-sync effect - triggers when calendars need sync
+  useEffect(() => {
+    if (autoSyncEnabled && calendarsThatNeedToSync.length > 0 && !autoSyncInProgress) {
+      // Add a delay to avoid triggering during initial loading
+      const timer = setTimeout(() => {
+        performAutoSync();
+      }, 3000); // 3 second delay
+      
+      return () => clearTimeout(timer);
+    }
+  }, [calendarsThatNeedToSync, autoSyncEnabled, autoSyncInProgress, performAutoSync]);
 
   // ===== CONTEXT VALUE =====
   const value = useMemo(() => ({
@@ -429,6 +514,7 @@ console.log("⏱️ Calendars Not Synced in last 24 h:", calendarsThatNeedToSync
 
     // Values
     unreadMessagesCount,
+    unacceptedChecklistsCount,
     messagesCount,
     
     // Resources (now real-time!)
@@ -464,6 +550,15 @@ console.log("⏱️ Calendars Not Synced in last 24 h:", calendarsThatNeedToSync
     removeCalendar,
     syncCalendar,
     
+    // Auto-sync states and actions
+    autoSyncInProgress,
+    syncingCalendarIds,
+    autoSyncEnabled,
+    calendarsThatNeedToSync,
+    performAutoSync,
+    triggerManualSync,
+    setAutoSyncEnabled,
+    
   }), [
     user,
     loading,
@@ -482,7 +577,14 @@ console.log("⏱️ Calendars Not Synced in last 24 h:", calendarsThatNeedToSync
     removeCalendar,
     syncCalendar,
     unreadMessagesCount,
+    unacceptedChecklistsCount,
     messagesCount,
+    autoSyncInProgress,
+    syncingCalendarIds,
+    autoSyncEnabled,
+    calendarsThatNeedToSync,
+    performAutoSync,
+    triggerManualSync,
   ]);
 
   return (

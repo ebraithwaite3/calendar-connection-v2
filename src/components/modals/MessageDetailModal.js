@@ -42,7 +42,7 @@ const MessageDetailModal = ({ isVisible, onClose, message }) => {
       
       // Navigate based on the screen type
       switch (screen) {
-        case 'Group':
+        case 'Groups':
           // Navigate to Groups tab home screen
           navigation.navigate('Groups', { 
             screen: 'GroupsHome',
@@ -62,6 +62,14 @@ const MessageDetailModal = ({ isVisible, onClose, message }) => {
           // Navigate to Calendar tab
           navigation.navigate('Calendar', { 
             screen: 'CalendarHome',
+            params: params 
+          });
+          break;
+
+        case 'Preferences':
+          // Navigate to Preferences tab home screen
+          navigation.navigate('Preferences', { 
+            screen: 'PreferencesHome',
             params: params 
           });
           break;

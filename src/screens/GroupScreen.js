@@ -1,34 +1,40 @@
-import React, { useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
+import React, { useEffect, useMemo } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   ScrollView,
-  SafeAreaView 
+  SafeAreaView,
 } from "react-native";
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../contexts/ThemeContext";
 import { useData } from "../contexts/DataContext";
 import GroupCard from "../components/cards/GroupCard";
+import GroupInviteCard from "../components/cards/GroupCard/GroupInviteCard";
 
 const GroupScreen = ({ navigation, route }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
   const { groups, user } = useData();
 
+  const pendingGroupInvites = useMemo(() => {
+    return user?.groupInvites || [];
+  }, [user?.groupInvites]);
+  console.log("Pending group invites:", pendingGroupInvites);
+
   // Log params whenever they change
   useEffect(() => {
     if (route.params) {
-      console.log('GroupScreen received params:', route.params);
+      console.log("GroupScreen received params:", route.params);
     }
   }, [route.params]);
 
   const handleCreateGroup = () => {
-    navigation.navigate('CreateGroup');
+    navigation.navigate("CreateGroup");
   };
 
   const handleJoinGroup = () => {
-    navigation.navigate('JoinGroup');
+    navigation.navigate("JoinGroup");
   };
 
   const styles = StyleSheet.create({
@@ -47,10 +53,10 @@ const GroupScreen = ({ navigation, route }) => {
       backgroundColor: theme.surface,
     },
     headerTopRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      flexWrap: 'wrap', // Handle small screens
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      flexWrap: "wrap", // Handle small screens
     },
     headerTitle: {
       fontSize: getTypography.h2.fontSize,
@@ -70,8 +76,8 @@ const GroupScreen = ({ navigation, route }) => {
     },
     emptyState: {
       flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
       paddingBottom: getSpacing.xxl,
     },
     emptyIcon: {
@@ -82,18 +88,18 @@ const GroupScreen = ({ navigation, route }) => {
       fontWeight: getTypography.h3.fontWeight,
       color: theme.text.primary,
       marginBottom: getSpacing.md,
-      textAlign: 'center',
+      textAlign: "center",
     },
     emptySubtitle: {
       fontSize: getTypography.body.fontSize,
       color: theme.text.secondary,
-      textAlign: 'center',
+      textAlign: "center",
       marginBottom: getSpacing.xl,
       lineHeight: 22,
       paddingHorizontal: getSpacing.md,
     },
     buttonContainer: {
-      alignItems: 'center',
+      alignItems: "center",
       gap: getSpacing.md,
     },
     createButton: {
@@ -101,8 +107,8 @@ const GroupScreen = ({ navigation, route }) => {
       paddingVertical: getSpacing.md,
       paddingHorizontal: getSpacing.xl,
       borderRadius: getBorderRadius.md,
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       elevation: 2,
       shadowColor: theme.primary,
       shadowOffset: { width: 0, height: 2 },
@@ -122,8 +128,8 @@ const GroupScreen = ({ navigation, route }) => {
       paddingVertical: getSpacing.md,
       paddingHorizontal: getSpacing.xl,
       borderRadius: getBorderRadius.md,
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
     },
     joinButtonText: {
       color: theme.text.primary,
@@ -139,10 +145,10 @@ const GroupScreen = ({ navigation, route }) => {
       width: 48,
       height: 48,
       borderRadius: 24,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
       elevation: 4,
-      shadowColor: '#000',
+      shadowColor: "#000",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.25,
       shadowRadius: 4,
@@ -166,14 +172,14 @@ const GroupScreen = ({ navigation, route }) => {
             <Text style={styles.headerTitle}>Groups</Text>
             {groups.length > 0 && (
               <>
-                <TouchableOpacity 
-                  style={[styles.fab, styles.joinFab]} 
+                {/* <TouchableOpacity
+                  style={[styles.fab, styles.joinFab]}
                   onPress={handleJoinGroup}
                 >
                   <Ionicons name="people" size={24} color={theme.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.fab} 
+                </TouchableOpacity> */}
+                <TouchableOpacity
+                  style={styles.fab}
                   onPress={handleCreateGroup}
                 >
                   <Ionicons name="add" size={24} color={theme.text.inverse} />
@@ -186,47 +192,45 @@ const GroupScreen = ({ navigation, route }) => {
           </Text>
         </View>
 
+        {pendingGroupInvites.length > 0 &&
+          pendingGroupInvites.map((invite, index) => (
+            <GroupInviteCard key={invite.groupId || index} invite={invite} />
+          ))}
+
         {/* Content */}
         <View style={styles.content}>
           {groups.length === 0 ? (
             // Empty state
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
-                <Ionicons 
-                  name="people-outline" 
-                  size={64} 
-                  color={theme.text.tertiary} 
+                <Ionicons
+                  name="people-outline"
+                  size={64}
+                  color={theme.text.tertiary}
                 />
               </View>
               <Text style={styles.emptyTitle}>No Groups Yet</Text>
               <Text style={styles.emptySubtitle}>
-                Create a group to share calendars with family, teams, or friends. Or join an existing group with an invite code.
+                Create a group to share calendars with family, teams, or
+                friends. Or join an existing group with an invite code.
               </Text>
               <View style={styles.buttonContainer}>
-                <TouchableOpacity 
-                  style={styles.createButton} 
+                <TouchableOpacity
+                  style={styles.createButton}
                   onPress={handleCreateGroup}
                 >
                   <Ionicons name="add" size={20} color={theme.text.inverse} />
                   <Text style={styles.createButtonText}>Create Group</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.joinButton} 
-                  onPress={handleJoinGroup}
-                >
-                  <Ionicons name="people" size={20} color={theme.text.primary} />
-                  <Text style={styles.joinButtonText}>Join Group</Text>
-                </TouchableOpacity>
               </View>
             </View>
           ) : (
             // Groups list
-            <ScrollView 
+            <ScrollView
               style={styles.groupsList}
               showsVerticalScrollIndicator={false}
             >
-              {groups.map((group) => (
+              {groups?.map((group) => (
                 <GroupCard
                   key={group.id || group.groupId}
                   group={group}

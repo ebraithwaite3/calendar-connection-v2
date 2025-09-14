@@ -16,7 +16,8 @@ const SlideOutMenu = ({
   onClose, 
   onLogout, 
   isDarkMode, 
-  toggleTheme 
+  toggleTheme,
+  unreadMessagesCount 
 }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
   const navigation = useNavigation();
@@ -44,6 +45,11 @@ const SlideOutMenu = ({
       borderBottomWidth: 1,
       borderBottomColor: theme.divider,
     },
+    menuItemContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+    },
     menuItemText: {
       fontSize: getTypography.body.fontSize,
       color: theme.text.primary,
@@ -53,6 +59,21 @@ const SlideOutMenu = ({
       width: 20,
       fontSize: 16,
       color: theme.text.secondary,
+    },
+    notificationBadge: {
+      backgroundColor: '#EF4444',
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 'auto',
+    },
+    notificationText: {
+      color: 'white',
+      fontSize: 12,
+      fontWeight: 'bold',
+      textAlign: 'center',
     },
     logoutItem: {
       borderBottomColor: theme.error,
@@ -85,6 +106,12 @@ const SlideOutMenu = ({
     navigation.navigate('Preferences');
   }
 
+  const formatNotificationCount = (count) => {
+    if (count <= 0) return '';
+    if (count > 99) return '99+';
+    return count.toString();
+  };
+
   return (
     <Modal
       animationType="slide"
@@ -103,8 +130,17 @@ const SlideOutMenu = ({
 
               {/* Messages */}
               <TouchableOpacity style={styles.menuItem} onPress={handleMessagesNavigation}>
-                <Text style={styles.menuItemIcon}>💬</Text>
-                <Text style={styles.menuItemText}>Messages</Text>
+                <View style={styles.menuItemContent}>
+                  <Text style={styles.menuItemIcon}>💬</Text>
+                  <Text style={styles.menuItemText}>Messages</Text>
+                </View>
+                {unreadMessagesCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationText}>
+                      {formatNotificationCount(unreadMessagesCount)}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
 
               {/* Theme Toggle */}

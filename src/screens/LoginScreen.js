@@ -395,7 +395,9 @@ const styles = StyleSheet.create({
   },
   switchText: {
     color: "#3b82f6",
-    fontSize: 16,
+    fontSize: 20,
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
   disabledText: {
     color: "#9ca3af",

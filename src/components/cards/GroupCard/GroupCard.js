@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -7,6 +7,8 @@ import ExpandableCalendarsSection from "./ExpandableCalendarsSection";
 import ExpandableMembersSection from "./ExpandableMembersSection";
 import { useGroupActions } from "../../../hooks";
 import { useData } from "../../../contexts/DataContext";
+import GroupChecklistsModal from "./GroupChecklistsModal";
+import GroupInviteModal from "./GroupInviteModal";
 
 const GroupCard = ({ group, currentUserId }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
@@ -19,6 +21,8 @@ const GroupCard = ({ group, currentUserId }) => {
     addCalendarsToGroup,
     updateGroupRole,
   } = useGroupActions();
+  const [isChecklistModalVisible, setIsChecklistModalVisible] = useState(false);
+  const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
 
   // Check if current user is admin
   const currentUserMember = group.members?.find(
@@ -44,65 +48,13 @@ const GroupCard = ({ group, currentUserId }) => {
     currentUserMember
   );
 
-  const handleCopyInviteLink = async (role = "member") => {
-    try {
-      const roleCode = {
-        admin: group.inviteCodes?.admin,
-        member: group.inviteCodes?.member,
-        child: group.inviteCodes?.child,
-      }[role];
-
-      const roleDescription = {
-        admin: "Admin",
-        member: "Member",
-        child: "Child",
-      }[role];
-
-      const inviteData = {
-        groupName: group.name || group.groupName,
-        inviteCode: roleCode,
-        message: `Join "${
-          group.name || group.groupName
-        }" on our family calendar app!\n\nGroup Name: ${
-          group.name || group.groupName
-        }\nInvite Code: ${roleCode}\nRole: ${roleDescription}`,
-      };
-
-      await Clipboard.setStringAsync(inviteData.message);
-
-      Alert.alert(
-        "Invite Code Copied!",
-        `${roleDescription} invite code has been copied to your clipboard.`,
-        [{ text: "OK" }]
-      );
-    } catch (error) {
-      Alert.alert("Error", "Failed to copy invite information");
-    }
-  };
+  const groupChecklists = useMemo(() => {
+    return group.checklists || [];
+  }, [group]);
+  console.log("Group Checklists:", groupChecklists);
 
   const handleInvitePress = () => {
-    Alert.alert(
-      "Select Invite Role",
-      "Choose what role to invite someone as:",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Child",
-          onPress: () => handleCopyInviteLink("child"),
-        },
-        {
-          text: "Member",
-          onPress: () => handleCopyInviteLink("member"),
-        },
-        {
-          text: "Admin",
-          onPress: () => handleCopyInviteLink("admin"),
-        },
-      ]
-    );
+    setIsInviteModalVisible(true);
   };
 
   const handleDeleteGroup = async () => {
@@ -137,23 +89,28 @@ const GroupCard = ({ group, currentUserId }) => {
                   style: "destructive",
                   onPress: async () => {
                     try {
-                      console.log("🗑️ CONFIRMED DELETE GROUP:", group.id || group.groupId);
-                      
+                      console.log(
+                        "🗑️ CONFIRMED DELETE GROUP:",
+                        group.id || group.groupId
+                      );
+
                       await deleteGroup(group.id || group.groupId, {
                         userId: currentUserId,
-                        username: user?.username || 'Unknown User'
+                        username: user?.username || "Unknown User",
                       });
-                      
+
                       Alert.alert(
                         "Group Deleted",
-                        `${group.name || group.groupName} has been successfully deleted.`
+                        `${
+                          group.name || group.groupName
+                        } has been successfully deleted.`
                       );
-                      
                     } catch (error) {
-                      console.error('Error deleting group:', error);
+                      console.error("Error deleting group:", error);
                       Alert.alert(
-                        'Delete Failed', 
-                        error.message || 'Failed to delete group. Please try again.'
+                        "Delete Failed",
+                        error.message ||
+                          "Failed to delete group. Please try again."
                       );
                     }
                   },
@@ -339,10 +296,10 @@ const GroupCard = ({ group, currentUserId }) => {
       gap: getSpacing.sm,
     },
     rejoinButton: {
-        padding: getSpacing.sm,
-        borderRadius: getBorderRadius.sm,
-        backgroundColor: theme.success?.background || '#F0FDF4',
-      },
+      padding: getSpacing.sm,
+      borderRadius: getBorderRadius.sm,
+      backgroundColor: theme.success?.background || "#F0FDF4",
+    },
     settingsButton: {
       padding: getSpacing.sm,
     },
@@ -440,10 +397,8 @@ const GroupCard = ({ group, currentUserId }) => {
                 color={theme.error?.text || "#EF4444"}
               />
             </TouchableOpacity>
-          ) : isMyRoleChild ? // Case 2: Child gets nothing
-          null : !amIActive &&
-            wasRemovedByOther ? // Case 3: Removed by admin gets nothing
-          null : !amIActive ? (
+          ) : isMyRoleChild ? null : !amIActive && // Case 2: Child gets nothing
+            wasRemovedByOther ? null : !amIActive ? ( // Case 3: Removed by admin gets nothing
             // Case 4: Left themselves gets rejoin button
             <TouchableOpacity
               style={styles.rejoinButton}
@@ -488,6 +443,41 @@ const GroupCard = ({ group, currentUserId }) => {
             </View>
           </TouchableOpacity>
         </View>
+      )}
+
+      {/* Button to open Group Checklist - only for active members */}
+      {amIActive && (
+        <TouchableOpacity
+          style={{
+            marginBottom: getSpacing.md,
+            padding: getSpacing.md,
+            backgroundColor: theme.background,
+            borderRadius: getBorderRadius.md,
+            borderWidth: 1,
+            borderColor: theme.border,
+          }}
+          onPress={() => setIsChecklistModalVisible(true)}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="list-outline" size={18} color={theme.primary} />
+            <Text
+              style={{
+                fontSize: getTypography.body.fontSize,
+                fontWeight: "600",
+                color: theme.primary,
+                marginLeft: getSpacing.sm,
+              }}
+            >
+              Group Checklists ({groupChecklists.length})
+            </Text>
+          </View>
+        </TouchableOpacity>
       )}
 
       {/* Member indicator - only for non-admins */}
@@ -537,6 +527,24 @@ const GroupCard = ({ group, currentUserId }) => {
             : "You have left this group. Rejoin to see members and calendars."}{" "}
         </Text>
       )}
+
+      <GroupChecklistsModal
+        isVisible={isChecklistModalVisible}
+        onClose={() => setIsChecklistModalVisible(false)}
+        group={group}
+        user={user}
+        onUpdate={() => {
+          // Refresh group data if needed
+          console.log("Group checklists updated");
+        }}
+      />
+
+      <GroupInviteModal
+        isVisible={isInviteModalVisible}
+        onClose={() => setIsInviteModalVisible(false)}
+        user={user}
+        group={group}
+      />
     </View>
   );
 };

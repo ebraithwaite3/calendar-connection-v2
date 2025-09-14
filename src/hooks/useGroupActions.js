@@ -344,7 +344,7 @@ export const useGroupActions = () => {
                   username: myUsername,
                   groupName: groupToJoin.name,
                   screenForNavigation: {
-                    screen: "Group",
+                    screen: "Groups",
                     params: { groupId: groupToJoin.groupId },
                   },
                 },
@@ -551,7 +551,7 @@ export const useGroupActions = () => {
                   username: myUsername,
                   groupName: group.name,
                   screenForNavigation: {
-                    screen: "Group",
+                    screen: "Groups",
                     params: { groupId: groupId },
                   },
                 },
@@ -578,7 +578,7 @@ export const useGroupActions = () => {
                 username: myUsername,
                 groupName: group.name,
                 screenForNavigation: {
-                  screen: "Group",
+                  screen: "Groups",
                   params: { groupId: groupId },
                 },
               },
@@ -837,7 +837,7 @@ export const useGroupActions = () => {
                     username: myUsername,
                     groupName: group.name,
                     screenForNavigation: {
-                      screen: "Group",
+                      screen: "Groups",
                       params: { groupId: groupId },
                     },
                   },
@@ -861,7 +861,7 @@ export const useGroupActions = () => {
                 username: myUsername,
                 groupName: group.name,
                 screenForNavigation: {
-                  screen: "Group",
+                  screen: "Groups",
                   params: { groupId: groupId },
                 },
               },
@@ -1003,7 +1003,7 @@ export const useGroupActions = () => {
                 username: myUsername,
                 groupName: group.name,
                 screenForNavigation: {
-                  screen: "Group",
+                  screen: "Groups",
                   params: { groupId: groupId },
                 },
               },
@@ -1027,7 +1027,7 @@ export const useGroupActions = () => {
                 username: myUsername,
                 groupName: group.name,
                 screenForNavigation: {
-                  screen: "Group",
+                  screen: "Groups",
                   params: { groupId: groupId },
                 },
               },
@@ -1213,7 +1213,7 @@ export const useGroupActions = () => {
                     username: myUsername,
                     groupName: group.name,
                     screenForNavigation: {
-                      screen: "Group",
+                      screen: "Groups",
                       params: { groupId: groupId },
                     },
                   },
@@ -1420,7 +1420,7 @@ export const useGroupActions = () => {
                     username: myUsername,
                     groupName: group.name,
                     screenForNavigation: {
-                      screen: "Group",
+                      screen: "Groups",
                       params: { groupId: groupId },
                     },
                   },
@@ -1710,7 +1710,7 @@ export const useGroupActions = () => {
                     username: myUsername,
                     groupName: group.name,
                     screenForNavigation: {
-                      screen: "Group",
+                      screen: "Groups",
                       params: { groupId: groupId },
                     },
                   },
@@ -1767,6 +1767,166 @@ export const useGroupActions = () => {
     ]
   );
 
+  const inviteUsersToGroup = useCallback(
+    async (groupId, invites, invitingUserInfo) => {
+      try {
+        if (!authUser?.uid) {
+          throw new Error("User not authenticated");
+        }
+        if (!Array.isArray(invites) || invites.length === 0) {
+          throw new Error("No invites provided");
+        }
+        if (!invitingUserInfo) {
+          throw new Error("Inviting user profile data missing");
+        }
+  
+        console.log(
+          `Inviting users to group ${groupId}:`,
+          invites.map((i) => i.email)
+        );
+  
+        let nonExistentEmails = [];
+        let processedInvites = [];
+  
+        // Go through EACH invite separately
+        for (const invite of invites) {
+          const email = invite.email.trim().toLowerCase();
+  
+          // Fetch user document by email
+          const userQuery = await getDocumentsByField("users", "email", email);
+          
+          if (userQuery.length === 0) {
+            // User doesn't exist - add entire invite info to nonExistentEmails
+            nonExistentEmails.push(invite);
+          } else {
+            // User exists - get their full document
+            const userDoc = userQuery[0];
+            
+            // Check if the user is already in the group
+            const groupQuery = await getDocumentsByField(
+              "groups",
+              "groupId", 
+              groupId
+            );
+            if (groupQuery.length === 0) {
+              throw new Error("Group not found");
+            }
+            const group = groupQuery[0];
+            const alreadyMember = group.members.some(
+              (m) => m.userId === userDoc.userId && m.active
+            );
+            if (alreadyMember) {
+              console.log(
+                `User ${userDoc.userId} is already an active member of group ${groupId}, skipping invite`
+              );
+              continue;
+            }
+  
+            // Add the invite to their groupInvites array
+            const currentGroupInvites = userDoc.groupInvites || [];
+            const newInvite = {
+              groupId: invite.groupId,
+              groupName: invite.groupName,
+              inviteCode: invite.inviteCode,
+              role: invite.role,
+              inviterUserId: invitingUserInfo.userId,
+              inviterName: invite.inviterName,
+              invitedAt: DateTime.now().toISO(),
+              status: 'pending'
+            };
+            
+            const updatedGroupInvites = [...currentGroupInvites, newInvite];
+            
+            // Update the user's document with the new invite
+            await updateDocument('users', userDoc.userId, {
+              groupInvites: updatedGroupInvites
+            });
+            
+            // Check if they want notifications for group activity
+            if (userDoc.preferences?.notifyFor?.groupActivity === true) {
+              const messageText = `${invite.inviterName} has invited you to join their group, ${invite.groupName}`;
+              
+              const sendingUserInfo = {
+                userId: invitingUserInfo.userId,
+                username: invite.inviterName,
+                groupName: invite.groupName,
+                screenForNavigation: {
+                  screen: 'Groups'
+                }
+              };
+              
+              await addMessageToUser(userDoc.userId, sendingUserInfo, messageText);
+            }
+            
+            // Add to our tracking array
+            processedInvites.push(invite);
+          }
+        }
+  
+        console.log('Non-existent emails:', nonExistentEmails);
+        console.log('Processed invites:', processedInvites);
+  
+        // For each member in nonExistentEmails, need to go to the doc in admin collection
+        // that has type: storedInvites and add ALL the nonExistenEmails objects to the invites array
+        if (nonExistentEmails.length > 0) {
+          console.log('Checking for existing admin storedInvites document...');
+const adminQuery = await getDocumentsByField("admin", "type", "storedInvites");
+console.log('Admin query result:', adminQuery);
+console.log('Admin query length:', adminQuery.length);
+          let adminDoc;
+          if (adminQuery.length === 0) {
+            // No admin doc exists yet - create one
+            const newAdminDoc = {
+              type: "storedInvites",
+              invites: nonExistentEmails,
+              createdAt: DateTime.now().toISO(),
+              updatedAt: DateTime.now().toISO(),
+            };
+            const docId = await addDocument("admin", newAdminDoc);
+            adminDoc = { ...newAdminDoc, docId };
+            console.log("Created new admin storedInvites document:", docId);
+          } else {
+            // Admin doc exists - update it
+            adminDoc = adminQuery[0];
+            const updatedInvites = [
+              ...(adminDoc.invites || []),
+              ...nonExistentEmails,
+            ];
+            await updateDocument("admin", adminDoc.id, {
+              invites: updatedInvites,
+              updatedAt: DateTime.now().toISO(),
+            });
+            console.log(
+              `Updated admin storedInvites document ${adminDoc.id} with ${nonExistentEmails.length} new invite(s)`
+            );
+          }
+        }
+  
+        // Create summary object
+        const summary = {
+          invitedUsers: processedInvites.length,
+          storedEmails: nonExistentEmails.length,
+          totalProcessed: processedInvites.length + nonExistentEmails.length
+        };
+  
+        console.log(
+          `✅ Successfully processed invites. ${summary.invitedUsers} user(s) invited, ${summary.storedEmails} email(s) stored for future.`
+        );
+  
+        if (summary.totalProcessed === 0) {
+          throw new Error("No valid invites to process. All users may already be members.");
+        }
+  
+        return summary;
+  
+      } catch (error) {
+        console.error("❌ Error inviting users to group:", error);
+        throw error;
+      }
+    },
+    [authUser, user?.groups]
+  );
+
   return {
     createGroup,
     joinGroup,
@@ -1776,5 +1936,6 @@ export const useGroupActions = () => {
     deleteGroup,
     removeCalendarFromGroup,
     addCalendarsToGroup,
+    inviteUsersToGroup,
   };
 };

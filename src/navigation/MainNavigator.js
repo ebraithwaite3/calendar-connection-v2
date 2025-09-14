@@ -33,6 +33,7 @@ const Tab = createBottomTabNavigator();
 const TodayStack = createStackNavigator();
 const CalendarStack = createStackNavigator();
 const GroupsStack = createStackNavigator();
+const MessagesStack = createStackNavigator();
 const PreferencesStack = createStackNavigator();
 
 // Stack navigators for each tab
@@ -43,8 +44,8 @@ function TodayStackScreen() {
       <TodayStack.Screen name="EventDetails" component={EventDetailsScreen} />
       <TodayStack.Screen name="CreateEvent" component={CreateEventScreen} />
       <TodayStack.Screen name="AddScreen" component={AddScreen} />
-      <TodayStack.Screen name="Messages" component={MessagesScreen} />
       <TodayStack.Screen name="CreateTask" component={CreateTaskScreen} />
+      <TodayStack.Screen name="ImportCalendar" component={ImportCalendarScreen} />
     </TodayStack.Navigator>
   );
 }
@@ -57,7 +58,6 @@ function CalendarStackScreen() {
       <CalendarStack.Screen name="CreateEvent" component={CreateEventScreen} />
       <CalendarStack.Screen name="AddScreen" component={AddScreen} />
       <CalendarStack.Screen name="ImportCalendar" component={ImportCalendarScreen} />
-      <CalendarStack.Screen name="Messages" component={MessagesScreen} />
       <CalendarStack.Screen name="CreateTask" component={CreateTaskScreen} />
       <CalendarStack.Screen name="DayScreen" component={DayScreen} />
     </CalendarStack.Navigator>
@@ -71,8 +71,15 @@ function GroupsStackScreen() {
       <GroupsStack.Screen name="GroupDetails" component={GroupDetailsScreen} />
       <GroupsStack.Screen name="CreateGroup" component={CreateGroupScreen} />
       <GroupsStack.Screen name="JoinGroup" component={JoinGroupScreen} />
-      <GroupsStack.Screen name="Messages" component={MessagesScreen} />
     </GroupsStack.Navigator>
+  );
+}
+
+function MessagesStackScreen() {
+  return (
+    <MessagesStack.Navigator screenOptions={{ headerShown: false }}>
+      <MessagesStack.Screen name="MessagesHome" component={MessagesScreen} />
+    </MessagesStack.Navigator>
   );
 }
 
@@ -80,12 +87,11 @@ function PreferencesStackScreen() {
   return (
     <PreferencesStack.Navigator screenOptions={{ headerShown: false }}>
       <PreferencesStack.Screen name="PreferencesHome" component={PreferencesScreen} />
-      <PreferencesStack.Screen name="Messages" component={MessagesScreen} />
     </PreferencesStack.Navigator>
   );
 }
 
-function TabNavigator({ initialRoute, theme, onLogout }) {
+function TabNavigator({ initialRoute, theme, onLogout, unreadMessagesCount, unacceptedChecklistsCount }) {
   const getTabBarIcon = (routeName, focused) => {
     let icon;
     
@@ -102,11 +108,21 @@ function TabNavigator({ initialRoute, theme, onLogout }) {
       case 'Preferences':
         icon = focused ? '⚙️' : '🔧';
         break;
+        case 'Messages':
+        icon = focused ? '💬' : '🗨️';
+        break;
       default:
         icon = '❓';
     }
     
     return <Text style={{ fontSize: 20 }}>{icon}</Text>;
+  };
+
+  // Helper function to format badge count
+  const formatBadgeCount = (count) => {
+    if (count === 0) return null;
+    if (count <= 99) return count.toString();
+    return '99+';
   };
 
   return (
@@ -135,20 +151,36 @@ function TabNavigator({ initialRoute, theme, onLogout }) {
             fontWeight: '500',
             marginTop: 4,
           },
+          // Badge styling
+          tabBarBadgeStyle: {
+            backgroundColor: theme.error || '#ef4444',
+            color: '#ffffff',
+            fontSize: 12,
+            fontWeight: '600',
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+            paddingHorizontal: 4,
+            marginLeft: -6,
+            marginTop: 2,
+          },
         })}
       >
         <Tab.Screen
-  name="Today"
-  component={TodayStackScreen}
-  options={{ tabBarLabel: 'Today' }}
-  listeners={({ navigation }) => ({
-    tabPress: () => {
-      console.log("Navigating to TodayHome");
-      navigation.navigate('Today', { screen: 'TodayHome' });
-    },
-  })}
-/>
-
+          name="Today"
+          component={TodayStackScreen}
+          options={{ tabBarLabel: 'Today' }}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              const state = navigation.getState();
+              // Prevent default action if already at home screen of this tab
+              if (state.index === 0) {
+                e.preventDefault();
+              }
+              navigation.navigate('Today', { screen: 'TodayHome' });
+            },
+          })}
+        />
         <Tab.Screen 
           name="Calendar" 
           component={CalendarStackScreen}
@@ -156,8 +188,11 @@ function TabNavigator({ initialRoute, theme, onLogout }) {
             tabBarLabel: 'Calendars',
           }}
           listeners={({ navigation }) => ({
-            tabPress: () => {
-              console.log("Navigating to CalendarHome");
+            tabPress: (e) => {
+              const state = navigation.getState();
+              if (state.index === 0) {
+                e.preventDefault();
+              }
               navigation.navigate('Calendar', { screen: 'CalendarHome' });
             },
           })}
@@ -169,8 +204,30 @@ function TabNavigator({ initialRoute, theme, onLogout }) {
             tabBarLabel: 'Groups',
           }}
           listeners={({ navigation }) => ({
-            tabPress: () => {
+            tabPress: (e) => {
+              const state = navigation.getState();
+              if (state.index === 0) {
+                e.preventDefault();
+              }
               navigation.navigate('Groups', { screen: 'GroupsHome' });
+            },
+          })}
+        />
+        <Tab.Screen 
+          name="Messages" 
+          component={MessagesStackScreen}
+          options={{
+            tabBarLabel: 'Messages',
+            // Add badge with unread count
+            tabBarBadge: formatBadgeCount(unreadMessagesCount),
+          }}
+          listeners={({ navigation }) => ({
+            tabPress: (e) => {
+              const state = navigation.getState();
+              if (state.index === 0) {
+                e.preventDefault();
+              }
+              navigation.navigate('Messages', { screen: 'MessagesHome' });
             },
           })}
         />
@@ -179,9 +236,14 @@ function TabNavigator({ initialRoute, theme, onLogout }) {
           component={PreferencesStackScreen}
           options={{
             tabBarLabel: 'Preferences',
+            tabBarBadge: formatBadgeCount(unacceptedChecklistsCount),
           }}
           listeners={({ navigation }) => ({
-            tabPress: () => {
+            tabPress: (e) => {
+              const state = navigation.getState();
+              if (state.index === 0) {
+                e.preventDefault();
+              }
               navigation.navigate('Preferences', { screen: 'PreferencesHome' });
             },
           })}
@@ -195,7 +257,8 @@ const MainNavigator = ({ onLogout }) => {
   const { theme, isDarkMode } = useTheme();
   const [initialRoute, setInitialRoute] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const { loading, user } = useData();
+  const { loading, user, unreadMessagesCount, unacceptedChecklistsCount, } = useData();
+  console.log("Unread messages in MainNavigator:", unreadMessagesCount);
 
   // Get the default page from the user doc
   // in preferences.defaultLoadingPage
@@ -256,6 +319,11 @@ const MainNavigator = ({ onLogout }) => {
             Messages: 'groups/messages',
           },
         },
+        Messages: {
+          screens: {
+            MessagesHome: 'messages',
+          },
+        },
         Preferences: {
           screens: {
             PreferencesHome: 'preferences',
@@ -271,7 +339,13 @@ const MainNavigator = ({ onLogout }) => {
     <NavigationContainer 
       linking={linking}
     >
-      <TabNavigator initialRoute={initialRoute} theme={theme} onLogout={onLogout} />
+      <TabNavigator 
+        initialRoute={initialRoute} 
+        theme={theme} 
+        onLogout={onLogout}
+        unreadMessagesCount={unreadMessagesCount}
+        unacceptedChecklistsCount={unacceptedChecklistsCount}
+      />
     </NavigationContainer>
   );
 };

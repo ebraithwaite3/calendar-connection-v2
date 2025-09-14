@@ -395,12 +395,33 @@ const calendarDays = useMemo(() => {
 
           {/* Add Calendar Button */}
           <TouchableOpacity 
-            style={styles.fab} 
-            onPress={handleImportCalendar}
-            disabled={syncing}
-          >
-            <Ionicons name="add" size={24} color={theme.text.inverse} />
-          </TouchableOpacity>
+  style={[
+    styles.fab,
+    calendars?.length === 0 && {
+      width: 'auto',
+      height: 'auto',
+      paddingHorizontal: getSpacing.lg,
+      paddingVertical: getSpacing.md,
+      borderRadius: getBorderRadius.lg,
+    }
+  ]}
+  onPress={handleImportCalendar}
+  disabled={syncing}
+>
+  {calendars?.length === 0 ? (
+    <Text
+      style={{
+        color: theme.text.inverse,
+        fontSize: getTypography.body.fontSize,
+        fontWeight: "bold",
+      }}
+    >
+      Import a Calendar
+    </Text>
+  ) : (
+    <Ionicons name="add" size={24} color={theme.text.inverse} />
+  )}
+</TouchableOpacity>
         </View>
       </View>
 

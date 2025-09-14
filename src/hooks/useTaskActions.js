@@ -359,7 +359,7 @@ if (taskData.startTime) {
                     username: group.members.find(m => m.userId === deleterUserId)?.username || "Unknown User",
                     groupName: group.name,
                     screenForNavigation: {
-                      screen: "GroupDetailsScreen", // Navigate back to group since task is deleted
+                      screen: "GroupsHome", // Navigate back to group since task is deleted
                       params: { 
                         groupId: groupId
                       },
@@ -403,10 +403,170 @@ if (taskData.startTime) {
     }
   }, []);
 
+  const shareChecklist = useCallback(async (checklist, selectedUserIds) => {
+    console.log("Sharing checklist:", checklist, "with users:", selectedUserIds);
+    
+    if (!checklist || !selectedUserIds || selectedUserIds.length === 0) {
+      throw new Error("Checklist and selected user IDs are required.");
+    }
+  
+    try {
+      const results = [];
+      
+      // Process each user
+      for (const userId of selectedUserIds) {
+        try {
+          console.log(`Processing checklist share for user: ${userId}`);
+          
+          // Get the user's current data
+          const userDoc = await getDocument("users", userId);
+          
+          if (!userDoc) {
+            console.warn(`User document not found for userId: ${userId}`);
+            results.push({ userId, success: false, error: "User not found" });
+            continue;
+          }
+  
+          // Get current saved checklists (ensure it's an array)
+          const currentChecklists = userDoc.savedChecklists || [];
+          
+          // Check if user can save more checklists (limit of 8)
+          if (currentChecklists.length >= 8) {
+            console.warn(`User ${userId} has reached checklist limit (8)`);
+            results.push({ 
+              userId, 
+              success: false, 
+              error: "User has reached maximum checklist limit (8)" 
+            });
+            continue;
+          }
+  
+          // Find a unique name for the checklist
+          const originalName = checklist.name;
+          let uniqueName = originalName;
+          let counter = 1;
+          
+          // Keep checking until we find a name that doesn't exist
+          while (currentChecklists.some(cl => 
+            cl.name.toLowerCase() === uniqueName.toLowerCase()
+          )) {
+            uniqueName = `${originalName} (${counter})`;
+            counter++;
+          }
+  
+          console.log(`Original name: "${originalName}", Unique name: "${uniqueName}"`);
+  
+          // Create the new checklist object
+          const newChecklist = {
+            id: checklist.id, // Keep the same ID for reference
+            name: uniqueName,
+            items: [...checklist.items], // Copy items array
+            createdAt: checklist.createdAt,
+            updatedAt: DateTime.now().toISO(),
+            sharedBy: checklist.sharedBy,
+            accepted: false // Mark as not accepted initially
+          };
+  
+          // Add to user's saved checklists
+          const updatedChecklists = [...currentChecklists, newChecklist];
+          
+          // Update the user document
+          await updateDocument("users", userId, {
+            savedChecklists: updatedChecklists
+          });
+  
+          console.log(`✅ Checklist shared successfully with user: ${userId}`);
+          results.push({ 
+            userId, 
+            success: true, 
+            checklistName: uniqueName 
+          });
+  
+          // STEP 2: Send notification if user wants groupActivity notifications
+          try {
+            // Check if user has notifications enabled and wants groupActivity notifications
+            const userPreferences = userDoc.preferences || {};
+            const shouldNotify = (
+              userPreferences.notifications === true &&
+              userPreferences.notifyFor?.groupActivity === true
+            );
+  
+            if (shouldNotify) {
+              console.log(`Sending checklist share notification to user: ${userId}`);
+              
+              const notificationMessage = `${checklist.sharedBy.username} has shared a new checklist with you.`;
+  
+              await addMessageToUser(
+                userId,
+                {
+                  userId: checklist.sharedBy.userId,
+                  username: checklist.sharedBy.username,
+                  groupName: null, // Not group-specific
+                  screenForNavigation: {
+                    screen: "Preferences", // Navigate to preferences where checklists are managed
+                    params: { 
+                      openChecklists: true // Optional param to auto-open checklist section
+                    },
+                  },
+                },
+                notificationMessage
+              );
+  
+              console.log(`✅ Notification sent to user: ${userId}`);
+              results[results.length - 1].notificationSent = true;
+            } else {
+              console.log(`User ${userId} doesn't want groupActivity notifications, skipping notification`);
+              results[results.length - 1].notificationSent = false;
+            }
+  
+          } catch (notificationError) {
+            console.error(`Error sending notification to user ${userId}:`, notificationError);
+            results[results.length - 1].notificationError = notificationError.message;
+            // Don't throw - notification failures shouldn't fail the sharing
+          }
+  
+        } catch (userError) {
+          console.error(`Error sharing checklist with user ${userId}:`, userError);
+          results.push({ 
+            userId, 
+            success: false, 
+            error: userError.message 
+          });
+        }
+      }
+  
+      // Summary logging
+      const successfulShares = results.filter(r => r.success).length;
+      const failedShares = results.filter(r => !r.success).length;
+      const notificationsSent = results.filter(r => r.notificationSent).length;
+  
+      console.log(`✅ Checklist sharing complete:`);
+      console.log(`  - Successful shares: ${successfulShares}`);
+      console.log(`  - Failed shares: ${failedShares}`);
+      console.log(`  - Notifications sent: ${notificationsSent}`);
+  
+      return {
+        success: successfulShares > 0,
+        results,
+        summary: {
+          total: selectedUserIds.length,
+          successful: successfulShares,
+          failed: failedShares,
+          notificationsSent
+        }
+      };
+  
+    } catch (error) {
+      console.error("Error in shareChecklist:", error);
+      throw new Error(`Failed to share checklist: ${error.message}`);
+    }
+  }, []);
+
   return {
     createTaskDoc,
     addTask,
     updateTask,
-    deleteTask
+    deleteTask,
+    shareChecklist,
   };
 };
