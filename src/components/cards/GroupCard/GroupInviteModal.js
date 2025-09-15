@@ -383,10 +383,7 @@ const GroupInviteModal = ({ isVisible, onClose, user, group }) => {
       visible={isVisible}
       onRequestClose={handleClose}
     >
-      <KeyboardAvoidingView 
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <View style={styles.overlay}>
         <View style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.header}>
@@ -395,98 +392,103 @@ const GroupInviteModal = ({ isVisible, onClose, user, group }) => {
               <Ionicons name="close" size={24} color={theme.text.secondary} />
             </TouchableOpacity>
           </View>
-
+  
           {/* Instructions */}
           <Text style={styles.instructions}>
             For each person you want to invite, enter their email address and select their role in the group.
           </Text>
-
-          <ScrollView 
-            ref={scrollViewRef}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+  
+          {/* KeyboardAware Content */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 75 : 0} // small offset
             style={{ flex: 1 }}
           >
-            {/* Invite Items */}
-            {invites.map((invite, index) => (
-              <View key={index} style={styles.inviteItem}>
-                <View style={styles.inviteHeader}>
-                  <Text style={styles.inviteNumber}>Invite {index + 1}</Text>
-                  {invites.length > 1 && (
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() => removeInvite(index)}
-                    >
-                      <Ionicons 
-                        name="trash-outline" 
-                        size={20} 
-                        color={theme.error || '#ef4444'} 
-                      />
-                    </TouchableOpacity>
-                  )}
+            <ScrollView
+              ref={scrollViewRef}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: getSpacing.lg }}
+            >
+              {invites.map((invite, index) => (
+                <View key={index} style={styles.inviteItem}>
+                  <View style={styles.inviteHeader}>
+                    <Text style={styles.inviteNumber}>Invite {index + 1}</Text>
+                    {invites.length > 1 && (
+                      <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => removeInvite(index)}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={20}
+                          color={theme.error || '#ef4444'}
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+  
+                  <Text style={styles.inputLabel}>Email Address</Text>
+                  <TextInput
+                    style={styles.emailInput}
+                    placeholder="Enter email address..."
+                    placeholderTextColor={theme.text.tertiary}
+                    value={invite.email}
+                    onChangeText={(text) => updateInvite(index, 'email', text)}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+  
+                  <Text style={styles.inputLabel}>Role</Text>
+                  <RoleSelector
+                    selectedRole={invite.role}
+                    onRoleChange={(role) => updateInvite(index, 'role', role)}
+                    theme={theme}
+                    getSpacing={getSpacing}
+                    getTypography={getTypography}
+                  />
                 </View>
-
-                {/* Email Input */}
-                <Text style={styles.inputLabel}>Email Address</Text>
-                <TextInput
-                  style={styles.emailInput}
-                  placeholder="Enter email address..."
-                  placeholderTextColor={theme.text.tertiary}
-                  value={invite.email}
-                  onChangeText={(text) => updateInvite(index, 'email', text)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-
-                {/* Role Selector */}
-                <Text style={styles.inputLabel}>Role</Text>
-                <RoleSelector
-                  selectedRole={invite.role}
-                  onRoleChange={(role) => updateInvite(index, 'role', role)}
-                  theme={theme}
-                  getSpacing={getSpacing}
-                  getTypography={getTypography}
-                />
-              </View>
-            ))}
-
-            {/* Add Another Button */}
-            <TouchableOpacity style={styles.addButton} onPress={addInvite}>
-              <Ionicons name="add" size={20} color={theme.primary} />
-              <Text style={styles.addButtonText}>Add Another Invite</Text>
-            </TouchableOpacity>
-
-            {/* Errors */}
-            {errors.length > 0 && (
-              <View style={styles.errorContainer}>
-                {errors.map((error, index) => (
-                  <Text key={index} style={styles.errorText}>• {error}</Text>
-                ))}
-              </View>
-            )}
-          </ScrollView>
-
-          {/* Action Buttons */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={[styles.button, styles.cancelButton]} 
-              onPress={handleClose}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.button, styles.inviteButtonStyle]} 
-              onPress={handleInvite}
-            >
-              <Text style={styles.inviteButtonText}>Send Invites</Text>
-            </TouchableOpacity>
-          </View>
+              ))}
+  
+              {/* Add Another Button */}
+              <TouchableOpacity style={styles.addButton} onPress={addInvite}>
+                <Ionicons name="add" size={20} color={theme.primary} />
+                <Text style={styles.addButtonText}>Add Another Invite</Text>
+              </TouchableOpacity>
+  
+              {/* Errors */}
+              {errors.length > 0 && (
+                <View style={styles.errorContainer}>
+                  {errors.map((error, index) => (
+                    <Text key={index} style={styles.errorText}>• {error}</Text>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+  
+            {/* Buttons (still inside KeyboardAvoidingView, so they move up) */}
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={handleClose}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+  
+              <TouchableOpacity
+                style={[styles.button, styles.inviteButtonStyle]}
+                onPress={handleInvite}
+              >
+                <Text style={styles.inviteButtonText}>Send Invites</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
+  
 };
 
 export default GroupInviteModal;
