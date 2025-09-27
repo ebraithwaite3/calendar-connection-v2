@@ -80,8 +80,10 @@ export const DataProvider = ({ children }) => {
         },
         (error) => {
           console.error("❌ User subscription error:", error);
-          console.error("❌ Error code:", error.code);
-          console.error("❌ Error message:", error.message);
+  console.error("❌ Error code:", error.code);
+  console.error("❌ Error message:", error.message);
+  console.error("❌ Auth user:", authUser?.uid);
+  console.error("❌ DB state:", !!db);
           setLoading(false);
         }
       );
@@ -264,59 +266,78 @@ export const DataProvider = ({ children }) => {
   }, [user?.groups, db]);
 
   // ===== ASSIGNMENTS REAL-TIME SUBSCRIPTION =====
-  useEffect(() => {
-    const validGroupRefs = (user?.groups || []).filter(ref => ref.groupId);
-    
-    if (validGroupRefs.length === 0) {
-      console.log("📝 No valid group references found for tasks");
-      setTasks([]);
-      setTasksLoading(false);
-      return;
-    }
-
-    console.log("📝 Setting up task subscriptions...");
-    setTasksLoading(true);
-    
-    const groupIds = validGroupRefs.map(ref => ref.groupId);
-    const unsubscribes = [];
-    
-    // Initialize empty tasks
+useEffect(() => {
+  if (!user?.userId) {
+    console.log("📝 No user ID found for tasks");
     setTasks([]);
-    
-    // Subscribe to each group's tasks document
-    groupIds.forEach(groupId => {
-      const unsubscribe = subscribeToDocument(
-        'tasks',
-        groupId,
-        (taskDoc) => {
-          if (taskDoc) {
-            console.log(`📝 Tasks for group ${groupId} updated`);
-            setTasks(prev => {
-              // Remove old tasks for this group and add new ones
-              const filteredTasks = prev.filter(task => task.groupId !== groupId);
-              return [...filteredTasks, taskDoc];
-            });
-          } else {
-            console.log(`ℹ️ No tasks document for group ${groupId}`);
-            // Remove tasks for this group if document doesn't exist
-            setTasks(prev => prev.filter(task => task.groupId !== groupId));
-          }
-        },
-        (error) => {
-          console.error(`❌ Tasks ${groupId} subscription error:`, error);
-        }
-      );
-      
-      unsubscribes.push(unsubscribe);
-    });
-    
     setTasksLoading(false);
+    return;
+  }
+
+  console.log("📝 Setting up task subscriptions...");
+  setTasksLoading(true);
+  
+  const unsubscribes = [];
+  const taskDocIds = [];
+  
+  // Always include personal tasks (using userId)
+  taskDocIds.push(user.userId);
+  
+  // Add group task documents (using groupId)
+  const validGroupRefs = (user?.groups || []).filter(ref => ref.groupId);
+  const groupIds = validGroupRefs.map(ref => ref.groupId);
+  taskDocIds.push(...groupIds);
+  
+  console.log("📝 Subscribing to task documents:", taskDocIds);
+  
+  // Initialize empty tasks
+  setTasks([]);
+  
+  // Subscribe to each task document (personal + all groups)
+  taskDocIds.forEach(docId => {
+    const isPersonalTasks = docId === user.userId;
     
-    return () => {
-      console.log("🧹 Cleaning up task subscriptions");
-      unsubscribes.forEach(unsubscribe => unsubscribe());
-    };
-  }, [user?.groups]);
+    const unsubscribe = subscribeToDocument(
+      'tasks',
+      docId,
+      (taskDoc) => {
+        if (taskDoc) {
+          console.log(`📝 Tasks for ${isPersonalTasks ? 'personal' : 'group'} ${docId} updated`);
+          
+          // Add metadata to distinguish personal vs group tasks
+          const enrichedTaskDoc = {
+            ...taskDoc,
+            isPersonal: isPersonalTasks,
+            docId: docId,
+            groupName: isPersonalTasks ? null : validGroupRefs.find(g => g.groupId === docId)?.name
+          };
+          
+          setTasks(prev => {
+            // Remove old tasks for this docId and add new ones
+            const filteredTasks = prev.filter(task => task.docId !== docId);
+            return [...filteredTasks, enrichedTaskDoc];
+          });
+        } else {
+          console.log(`ℹ️ No tasks document for ${isPersonalTasks ? 'personal' : 'group'} ${docId}`);
+          // Remove tasks for this docId if document doesn't exist
+          setTasks(prev => prev.filter(task => task.docId !== docId));
+        }
+      },
+      (error) => {
+        console.error(`❌ Tasks ${docId} subscription error:`, error);
+      }
+    );
+    
+    unsubscribes.push(unsubscribe);
+  });
+  
+  setTasksLoading(false);
+  
+  return () => {
+    console.log("🧹 Cleaning up task subscriptions");
+    unsubscribes.forEach(unsubscribe => unsubscribe());
+  };
+}, [user?.userId, user?.groups]);
 
   // ===== MESSAGES REAL-TIME SUBSCRIPTION =====
   useEffect(() => {
@@ -504,6 +525,15 @@ export const DataProvider = ({ children }) => {
     }
   }, [calendarsThatNeedToSync, autoSyncEnabled, autoSyncInProgress, performAutoSync]);
 
+  const retryUserSubscription = useCallback(() => {
+    if (authUser && db && !user) {
+      console.log("🔄 Manually retrying user subscription...");
+      setLoading(true);
+      // Force re-run the user subscription effect
+      setUser(null);
+    }
+  }, [authUser, db, user]);
+
   // ===== CONTEXT VALUE =====
   const value = useMemo(() => ({
     // Core data
@@ -549,6 +579,7 @@ export const DataProvider = ({ children }) => {
     // Actions
     removeCalendar,
     syncCalendar,
+    retryUserSubscription,
     
     // Auto-sync states and actions
     autoSyncInProgress,
@@ -585,6 +616,7 @@ export const DataProvider = ({ children }) => {
     calendarsThatNeedToSync,
     performAutoSync,
     triggerManualSync,
+    retryUserSubscription,
   ]);
 
   return (

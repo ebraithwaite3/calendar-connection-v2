@@ -221,7 +221,7 @@ const GroupInviteModal = ({ isVisible, onClose, user, group }) => {
       let successMessage = `${result.invitedUsers} user${result.invitedUsers !== 1 ? 's' : ''} invited successfully!`;
       
       if (result.storedEmails > 0) {
-        successMessage += `\n\n${result.storedEmails} email${result.storedEmails !== 1 ? 's' : ''} don't have accounts yet. They'll receive their invite when they sign up.`;
+        successMessage += `\n\n${result.storedEmails} email${result.storedEmails !== 1 ? 's' : ''} didn't have account(s) yet. They'll receive their invite when they sign up.`;
       }
       
       Alert.alert('Invites Sent', successMessage, [{ text: 'OK', onPress: handleClose }]);

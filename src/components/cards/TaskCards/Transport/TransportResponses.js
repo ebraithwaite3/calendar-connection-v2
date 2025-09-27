@@ -55,7 +55,7 @@ const TransportResponses = ({
       };
 
       await updateTask(
-        groupId,
+        assignment.isPersonalTask ? user.userId : groupId,
         assignment.taskId,
         updates,
         user?.userId
@@ -93,7 +93,7 @@ const TransportResponses = ({
       };
 
       await updateTask(
-        groupId,
+        assignment.isPersonalTask ? user.userId : groupId,
         assignment.taskId,
         updates,
         user?.userId
@@ -140,7 +140,7 @@ const TransportResponses = ({
       };
 
       await updateTask(
-        groupId,
+        assignment.isPersonalTask ? user.userId : groupId,
         assignment.taskId,
         updates,
         user?.userId

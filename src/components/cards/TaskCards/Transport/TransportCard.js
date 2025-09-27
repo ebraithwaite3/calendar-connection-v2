@@ -31,7 +31,7 @@ const TransportCard = ({
     try {
       // Update the task in the database
       await updateTask(
-        groupId,
+        currentAssignment.isPersonalTask ? user.userId : groupId,
         currentAssignment.taskId,
         { notes: updatedNotes },
         user?.userId
@@ -88,6 +88,10 @@ const TransportCard = ({
 
   const usersWhoCanRespond = useMemo(() => {
     if (!thisGroup || !thisGroup.members || !currentAssignment) return [];
+
+    if (currentAssignment.isPersonalTask) {
+      return [user];
+    }
 
     // Handle both 'all' (string) and ['all'] (array containing 'all')
     // Also handle the new 'visibilityOption' field
@@ -261,7 +265,7 @@ const TransportCard = ({
             notes={notes}
             isEventPast={isEventPast}
             assignmentId={currentAssignment.taskId || currentAssignment.assignmentId}
-            groupId={groupId}
+            docId={currentAssignment.isPersonalTask ? user.userId : groupId}
             onNotesUpdate={onNotesUpdate}
         />
         <TransportResponses

@@ -14,6 +14,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useData } from '../contexts/DataContext';
 import { useGroupActions } from '../hooks';
 import { Ionicons } from '@expo/vector-icons';
+import ColorSelector from '../components/ColorSelector';
 
 export default function CreateGroupScreen({ navigation }) {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
@@ -23,6 +24,7 @@ export default function CreateGroupScreen({ navigation }) {
   const [groupName, setGroupName] = useState('');
   const [selectedCalendars, setSelectedCalendars] = useState([]);
   const [creating, setCreating] = useState(false);
+  const [groupColor, setGroupColor] = useState('#3B82F6'); // Default color
 
   const resetForm = () => {
     setGroupName('');
@@ -65,6 +67,7 @@ export default function CreateGroupScreen({ navigation }) {
     const groupData = {
       groupName: groupName.trim(),
       calendars: selectedCalendars, // Pass the full calendar objects
+      groupCalendarColor: groupColor,
     };
 
     setCreating(true);
@@ -333,6 +336,19 @@ export default function CreateGroupScreen({ navigation }) {
               onChangeText={setGroupName}
               editable={!creating}
             />
+          </View>
+
+          {/* Group Calendar Color Selector */}
+          <View style={styles.section}>
+            <Text style={styles.label}>Group Calendar Color</Text>
+            <ColorSelector
+              selectedColor={groupColor}
+              onColorSelect={setGroupColor}
+              disabled={creating}
+            />
+            <Text style={styles.helpText}>
+              Select a color for the group's internal calendar
+            </Text>
           </View>
 
           {/* Calendar Selection */}

@@ -24,6 +24,7 @@ const AttendanceCard = ({
   // Local state to track assignment updates
   const [currentAssignment, setCurrentAssignment] = useState(assignment);
   const [expandCard, setExpandCard] = useState(false);
+  console.log("Current Assignment State:", currentAssignment);
 
   const onNotesUpdate = async (updatedNotes) => {
     console.log("Notes updated, updating local assignment...");
@@ -31,7 +32,7 @@ const AttendanceCard = ({
     try {
       // Update the task in the database
       await updateTask(
-        groupId,
+        currentAssignment.isPersonalTask ? user.userId : groupId,
         currentAssignment.taskId,
         { notes: updatedNotes },
         user?.userId
@@ -93,6 +94,10 @@ const AttendanceCard = ({
 
   const usersWhoCanRespond = useMemo(() => {
     if (!thisGroup || !thisGroup.members || !currentAssignment) return [];
+
+    if (currentAssignment.isPersonalTask) {
+      return [user];
+    }
 
     // Handle both 'all' (string) and ['all'] (array containing 'all')
     // Also handle the new 'visibilityOption' field
@@ -236,7 +241,7 @@ const AttendanceCard = ({
             notes={notes}
             isEventPast={isEventPast}
             assignmentId={currentAssignment.taskId || currentAssignment.assignmentId}
-            groupId={groupId}
+            docId={currentAssignment.isPersonalTask ? user.userId : groupId}
             onNotesUpdate={onNotesUpdate}
         />
         <AttendanceResponses

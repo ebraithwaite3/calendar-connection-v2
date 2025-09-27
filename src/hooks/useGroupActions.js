@@ -55,7 +55,13 @@ export const useGroupActions = () => {
 
         // Generate group Id
         const groupId = uuidv4();
-        console.log("Generated Group ID:", groupId);
+        const groupCalendarId = uuidv4();
+        console.log(
+          "Generated Group ID:",
+          groupId,
+          "and internal Group Calendar ID:",
+          groupCalendarId
+        );
 
         // Generate invite codes
         const adminInviteCode = await generateInviteCode();
@@ -68,7 +74,18 @@ export const useGroupActions = () => {
         console.log("  Child:", childInviteCode);
 
         // Get Selected Calendars Details - FIX: Handle the correct calendar structure
-        let sharedCalendars = [];
+        let sharedCalendars = [
+          {
+            calendarId: groupCalendarId,
+            name: `${groupData.groupName} Group Calendar`,
+            calendarType: "internal",
+            isOwner: true,
+            permissions: "write",
+            color: groupData.groupCalendarColor || "#3B82F6",
+            description: `${groupData.groupName} Group Calendar`,
+            importedBy: myUserId,
+          },
+        ];
         if (groupData.calendars && groupData.calendars.length > 0) {
           sharedCalendars = groupData.calendars.map((cal) => ({
             calendarId: cal.id || cal.calendarId,
@@ -108,16 +125,16 @@ export const useGroupActions = () => {
               notifyFor: {
                 groupActivity:
                   user.preferences?.notifyFor?.groupActivity ?? true,
-                newTasks:
-                  user.preferences?.notifyFor?.newTasks ?? true,
-                updatedTasks:
-                  user.preferences?.notifyFor?.updatedTasks ?? true,
-                deleteTasks:
-                  user.preferences?.notifyFor?.deleteTasks ?? true,
+                newTasks: user.preferences?.notifyFor?.newTasks ?? true,
+                updatedTasks: user.preferences?.notifyFor?.updatedTasks ?? true,
+                deletedTasks: user.preferences?.notifyFor?.deletedTasks ?? true,
                 newNotes: user.preferences?.notifyFor?.newNotes ?? true,
                 mentions: user.preferences?.notifyFor?.mentions ?? true,
                 reminders: user.preferences?.notifyFor?.reminders ?? true,
                 messages: user.preferences?.notifyFor?.messages ?? true,
+                newEvents: user.preferences?.notifyFor?.newEvents ?? true,
+                updatedEvents: user.preferences?.notifyFor?.updatedEvents ?? true,
+                deletedEvents: user.preferences?.notifyFor?.deletedEvents ?? true,
               },
             },
           ],
@@ -134,6 +151,21 @@ export const useGroupActions = () => {
           JSON.stringify(newGroup, null, 2)
         );
 
+        const internalCalendarData = {
+          admins: [myUserId],
+          calendarId: groupCalendarId,
+          color: groupData.groupCalendarColor || "#3B82F6",
+          createdAt: createdAt,
+          createdBy: myUserId,
+          events: {},
+          description: `${groupData.groupName} Group Calendar`,
+          isActive: true,
+          name: `${groupData.groupName} Group Calendar`,
+          subscribingUsers: [myUserId],
+          type: "internal",
+          updatedAt: createdAt,
+        };
+
         // ATOMIC OPERATIONS: Create group and task documents
         try {
           // Step 1: Create group document
@@ -146,21 +178,37 @@ export const useGroupActions = () => {
             username: myUsername,
           });
           console.log("✅ Task document created");
+
+          // Step 3: Create the internal calendar document
+          await createDocument(
+            "calendars",
+            groupCalendarId,
+            internalCalendarData
+          );
+          console.log("✅ Internal calendar document created");
         } catch (error) {
           console.error("❌ Atomic operation failed:", error);
 
-          // Rollback: Delete group document if task creation failed
-          try {
-            await deleteDocument("groups", groupId);
-            console.log("🔄 Rollback: Group document deleted");
-          } catch (rollbackError) {
-            console.error("❌ Rollback failed:", rollbackError);
-          }
+          // Rollback: Delete created documents
+          const rollbackPromises = [
+            deleteDocument("groups", groupId).catch((err) =>
+              console.error("Group rollback failed:", err)
+            ),
+            deleteDocument("calendars", groupCalendarId).catch((err) =>
+              console.error("Calendar rollback failed:", err)
+            ),
+            deleteDocument("tasks", groupId).catch((err) =>
+              console.error("Task rollback failed:", err)
+            ),
+          ];
+
+          await Promise.allSettled(rollbackPromises);
+          console.log("🔄 Rollback operations completed");
 
           throw new Error("Failed to create complete group structure");
         }
 
-        // Step 3: Update user's groups array (only after both documents are created)
+        // Step 4: Update user's groups and calendars arrays (only after all documents are created)
         const groupRef = {
           groupId,
           name: groupData.groupName,
@@ -168,23 +216,35 @@ export const useGroupActions = () => {
           joinedAt: createdAt,
         };
 
-        const updatedGroups = [...(user.groups || []), groupRef];
-        await updateDocument("users", authUser.uid, { groups: updatedGroups });
+        // Create calendar reference for user's calendars array
+        const userCalendarRef = {
+          calendarId: groupCalendarId,
+          name: `${groupData.groupName} Group Calendar`,
+          calendarType: "internal",
+          isOwner: true,
+          permissions: "write",
+          color: groupData.groupCalendarColor || "#3B82F6",
+          description: `${groupData.groupName} Group Calendar`,
+          importedBy: myUserId,
+        };
 
-        console.log("✅ Successfully created group:", groupId);
+        // Update both arrays in a single operation
+        const updatedGroups = [...(user.groups || []), groupRef];
+        const updatedCalendars = [...(user.calendars || []), userCalendarRef];
+
+        await updateDocument("users", authUser.uid, {
+          groups: updatedGroups,
+          calendars: updatedCalendars,
+        });
+
+        console.log("✅ Successfully created group and updated user:", groupId);
         return newGroup;
       } catch (error) {
         console.error("Error creating group:", error);
         throw error; // Re-throw so the UI can handle it
       }
     },
-    [
-      authUser,
-      myUserId,
-      myUsername,
-      user?.groups,
-      createTaskDoc,
-    ]
+    [authUser, myUserId, myUsername, user?.groups, user?.calendars, createTaskDoc]
   );
 
   const joinGroup = useCallback(
@@ -253,14 +313,15 @@ export const useGroupActions = () => {
           notifyFor: {
             groupActivity: user.preferences?.notifyFor?.groupActivity ?? true,
             newTasks: user.preferences?.notifyFor?.newTasks ?? true,
-            updatedTasks:
-              user.preferences?.notifyFor?.updatedTasks ?? true,
-            deleteTasks:
-              user.preferences?.notifyFor?.deleteTasks ?? true,
+            updatedTasks: user.preferences?.notifyFor?.updatedTasks ?? true,
+            deletedTasks: user.preferences?.notifyFor?.deletedTasks ?? true,
             newNotes: user.preferences?.notifyFor?.newNotes ?? true,
             mentions: user.preferences?.notifyFor?.mentions ?? true,
             reminders: user.preferences?.notifyFor?.reminders ?? true,
             messages: user.preferences?.notifyFor?.messages ?? true,
+            newEvents: user.preferences?.notifyFor?.newEvents ?? true,
+            updatedEvents: user.preferences?.notifyFor?.updatedEvents ?? true,
+            deletedEvents: user.preferences?.notifyFor?.deletedEvents ?? true,
           },
         };
         const updatedMembers = [...(groupToJoin.members || []), newMember];
@@ -574,14 +635,14 @@ export const useGroupActions = () => {
           await addMessageToUser(
             removedUserId,
             {
-                userId: myUserId,
-                username: myUsername,
-                groupName: group.name,
-                screenForNavigation: {
-                  screen: "Groups",
-                  params: { groupId: groupId },
-                },
+              userId: myUserId,
+              username: myUsername,
+              groupName: group.name,
+              screenForNavigation: {
+                screen: "Groups",
+                params: { groupId: groupId },
               },
+            },
             personalNotificationMessage
           );
           console.log(
@@ -833,14 +894,14 @@ export const useGroupActions = () => {
               addMessageToUser(
                 memberId,
                 {
-                    userId: myUserId,
-                    username: myUsername,
-                    groupName: group.name,
-                    screenForNavigation: {
-                      screen: "Groups",
-                      params: { groupId: groupId },
-                    },
+                  userId: myUserId,
+                  username: myUsername,
+                  groupName: group.name,
+                  screenForNavigation: {
+                    screen: "Groups",
+                    params: { groupId: groupId },
                   },
+                },
                 notificationMessage
               )
             )
@@ -857,14 +918,14 @@ export const useGroupActions = () => {
           await addMessageToUser(
             userIdToAdd,
             {
-                userId: myUserId,
-                username: myUsername,
-                groupName: group.name,
-                screenForNavigation: {
-                  screen: "Groups",
-                  params: { groupId: groupId },
-                },
+              userId: myUserId,
+              username: myUsername,
+              groupName: group.name,
+              screenForNavigation: {
+                screen: "Groups",
+                params: { groupId: groupId },
               },
+            },
             personalNotificationMessage
           );
           console.log(
@@ -1184,9 +1245,7 @@ export const useGroupActions = () => {
         try {
           // Delete the task document
           await deleteDocument("tasks", group.groupId);
-          console.log(
-            `✅ Successfully deleted task document ${group.groupId}`
-          );
+          console.log(`✅ Successfully deleted task document ${group.groupId}`);
         } catch (error) {
           console.error(
             `❌ Failed to delete task document ${group.groupId}:`,
@@ -1355,14 +1414,12 @@ export const useGroupActions = () => {
 
           if (taskQuery.length > 0) {
             const taskDoc = taskQuery[0];
-            const originalTasksCount =
-              taskDoc.tasks?.length || 0;
+            const originalTasksCount = taskDoc.tasks?.length || 0;
             const updatedTasks = (taskDoc.tasks || []).filter(
               (a) => !calendarIdsToRemove.has(a.calendarId)
             );
 
-            const removedTasksCount =
-              originalTasksCount - updatedTasks.length;
+            const removedTasksCount = originalTasksCount - updatedTasks.length;
 
             await updateDocument("tasks", taskDoc.docId, {
               tasks: updatedTasks,
@@ -1380,10 +1437,7 @@ export const useGroupActions = () => {
             );
           }
         } catch (error) {
-          console.error(
-            `❌ Failed to update tasks for calendars:`,
-            error
-          );
+          console.error(`❌ Failed to update tasks for calendars:`, error);
           console.warn(
             "Calendar removal from group succeeded, but task cleanup failed"
           );
@@ -1758,13 +1812,7 @@ export const useGroupActions = () => {
         throw error;
       }
     },
-    [
-      authUser,
-      myUserId,
-      myUsername,
-      user?.groups,
-      addUserToCalendar,
-    ]
+    [authUser, myUserId, myUsername, user?.groups, addUserToCalendar]
   );
 
   const inviteUsersToGroup = useCallback(
@@ -1779,33 +1827,33 @@ export const useGroupActions = () => {
         if (!invitingUserInfo) {
           throw new Error("Inviting user profile data missing");
         }
-  
+
         console.log(
           `Inviting users to group ${groupId}:`,
           invites.map((i) => i.email)
         );
-  
+
         let nonExistentEmails = [];
         let processedInvites = [];
-  
+
         // Go through EACH invite separately
         for (const invite of invites) {
           const email = invite.email.trim().toLowerCase();
-  
+
           // Fetch user document by email
           const userQuery = await getDocumentsByField("users", "email", email);
-          
+
           if (userQuery.length === 0) {
             // User doesn't exist - add entire invite info to nonExistentEmails
             nonExistentEmails.push(invite);
           } else {
             // User exists - get their full document
             const userDoc = userQuery[0];
-            
+
             // Check if the user is already in the group
             const groupQuery = await getDocumentsByField(
               "groups",
-              "groupId", 
+              "groupId",
               groupId
             );
             if (groupQuery.length === 0) {
@@ -1821,7 +1869,7 @@ export const useGroupActions = () => {
               );
               continue;
             }
-  
+
             // Add the invite to their groupInvites array
             const currentGroupInvites = userDoc.groupInvites || [];
             const newInvite = {
@@ -1832,47 +1880,55 @@ export const useGroupActions = () => {
               inviterUserId: invitingUserInfo.userId,
               inviterName: invite.inviterName,
               invitedAt: DateTime.now().toISO(),
-              status: 'pending'
+              status: "pending",
             };
-            
+
             const updatedGroupInvites = [...currentGroupInvites, newInvite];
-            
+
             // Update the user's document with the new invite
-            await updateDocument('users', userDoc.userId, {
-              groupInvites: updatedGroupInvites
+            await updateDocument("users", userDoc.userId, {
+              groupInvites: updatedGroupInvites,
             });
-            
+
             // Check if they want notifications for group activity
             if (userDoc.preferences?.notifyFor?.groupActivity === true) {
               const messageText = `${invite.inviterName} has invited you to join their group, ${invite.groupName}`;
-              
+
               const sendingUserInfo = {
                 userId: invitingUserInfo.userId,
                 username: invite.inviterName,
                 groupName: invite.groupName,
                 screenForNavigation: {
-                  screen: 'Groups'
-                }
+                  screen: "Groups",
+                },
               };
-              
-              await addMessageToUser(userDoc.userId, sendingUserInfo, messageText);
+
+              await addMessageToUser(
+                userDoc.userId,
+                sendingUserInfo,
+                messageText
+              );
             }
-            
+
             // Add to our tracking array
             processedInvites.push(invite);
           }
         }
-  
-        console.log('Non-existent emails:', nonExistentEmails);
-        console.log('Processed invites:', processedInvites);
-  
+
+        console.log("Non-existent emails:", nonExistentEmails);
+        console.log("Processed invites:", processedInvites);
+
         // For each member in nonExistentEmails, need to go to the doc in admin collection
         // that has type: storedInvites and add ALL the nonExistenEmails objects to the invites array
         if (nonExistentEmails.length > 0) {
-          console.log('Checking for existing admin storedInvites document...');
-const adminQuery = await getDocumentsByField("admin", "type", "storedInvites");
-console.log('Admin query result:', adminQuery);
-console.log('Admin query length:', adminQuery.length);
+          console.log("Checking for existing admin storedInvites document...");
+          const adminQuery = await getDocumentsByField(
+            "admin",
+            "type",
+            "storedInvites"
+          );
+          console.log("Admin query result:", adminQuery);
+          console.log("Admin query length:", adminQuery.length);
           let adminDoc;
           if (adminQuery.length === 0) {
             // No admin doc exists yet - create one
@@ -1901,24 +1957,25 @@ console.log('Admin query length:', adminQuery.length);
             );
           }
         }
-  
+
         // Create summary object
         const summary = {
           invitedUsers: processedInvites.length,
           storedEmails: nonExistentEmails.length,
-          totalProcessed: processedInvites.length + nonExistentEmails.length
+          totalProcessed: processedInvites.length + nonExistentEmails.length,
         };
-  
+
         console.log(
           `✅ Successfully processed invites. ${summary.invitedUsers} user(s) invited, ${summary.storedEmails} email(s) stored for future.`
         );
-  
+
         if (summary.totalProcessed === 0) {
-          throw new Error("No valid invites to process. All users may already be members.");
+          throw new Error(
+            "No valid invites to process. All users may already be members."
+          );
         }
-  
+
         return summary;
-  
       } catch (error) {
         console.error("❌ Error inviting users to group:", error);
         throw error;

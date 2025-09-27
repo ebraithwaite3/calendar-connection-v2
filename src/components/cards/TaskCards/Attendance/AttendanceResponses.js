@@ -33,6 +33,7 @@ const AttendanceResponses = ({
     const { updateTask } = useTaskActions();
   const [isUpdating, setIsUpdating] = useState(false);
   const [localAssignment, setLocalAssignment] = useState(assignment);
+  console.log("Users Who Can Respond:", usersWhoCanRespond);
 
   // New state for guest inputs
   const [guestInputs, setGuestInputs] = useState([]);
@@ -134,7 +135,7 @@ const AttendanceResponses = ({
       
       // TODO: Update the assignment in the database when you implement the service
       console.log('Would save to database:', {
-        groupId,
+        docId: currentAssignment.isPersonalTask ? user.userId : groupId,
         taskId: currentAssignment.taskId || currentAssignment.assignmentId,
         updates: assignmentUpdates
       });
@@ -218,7 +219,7 @@ const AttendanceResponses = ({
       
       // Save to database using updateTask
       await updateTask(
-        groupId,
+        currentAssignment.isPersonalTask ? user.userId : groupId,
         currentAssignment.taskId,
         updates,
         user?.userId
@@ -290,7 +291,7 @@ const AttendanceResponses = ({
       
       // Save to database using updateTask
       await updateTask(
-        groupId,
+        currentAssignment.isPersonalTask ? user.userId : groupId,
         currentAssignment.taskId,
         updates,
         user?.userId

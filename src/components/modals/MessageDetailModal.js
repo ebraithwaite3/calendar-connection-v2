@@ -58,13 +58,22 @@ const MessageDetailModal = ({ isVisible, onClose, message }) => {
           });
           break;
         
-        case 'Calendar':
-          // Navigate to Calendar tab
-          navigation.navigate('Calendar', { 
-            screen: 'CalendarHome',
-            params: params 
-          });
-          break;
+          case 'Calendar':
+            // Navigate to Calendar tab with nested navigation
+            if (params && params.screen === 'DayScreen') {
+              // For DayScreen navigation (like event notifications)
+              navigation.navigate('Calendar', {
+                screen: 'DayScreen',
+                params: params.params // This contains { date, highlightEvent }
+              });
+            } else {
+              // Default Calendar navigation
+              navigation.navigate('Calendar', { 
+                screen: 'CalendarHome',
+                params: params 
+              });
+            }
+            break;
 
         case 'Preferences':
           // Navigate to Preferences tab home screen

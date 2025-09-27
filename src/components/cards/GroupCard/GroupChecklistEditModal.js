@@ -1,4 +1,4 @@
-// GroupChecklistEditModal.js - Create/Edit form with message sending
+// GroupChecklistEditModal.js - Refactored for better keyboard handling
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -18,7 +18,6 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import { updateDocument } from "../../../services/firestoreService";
 import * as Crypto from "expo-crypto";
 
-// You'll need to create this service or import your existing message service
 import { addMessageToUser } from "../../../services/messageService";
 
 const GroupChecklistEditModal = ({ 
@@ -40,7 +39,6 @@ const GroupChecklistEditModal = ({
   const isEditing = checklist !== null;
   const title = isEditing ? 'Edit Checklist' : 'Create Checklist';
 
-  // Initialize form when modal opens
   useEffect(() => {
     if (isVisible) {
       if (isEditing && checklist) {
@@ -98,55 +96,51 @@ const GroupChecklistEditModal = ({
       const nextId = items[nextIndex].id;
       setTimeout(() => {
         inputRefs.current[nextId]?.focus();
-        scrollViewRef.current?.scrollTo({
-          y: (nextIndex + 1) * 60,
-          animated: true
-        });
       }, 50);
     } else {
       addItem();
     }
   }, [items, addItem]);
+  
+  // New function to scroll to focused input
+  const handleInputFocus = useCallback((index) => {
+    setTimeout(() => {
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({
+          y: index * 60, // Adjust this multiplier as needed
+          animated: true,
+        });
+      }
+    }, 100);
+  }, []);
+
 
   const validateForm = () => {
     const newErrors = [];
-    
     if (!checklistName.trim()) {
       newErrors.push('Checklist name is required.');
     }
-
     const validItems = items.filter(item => item.text.trim());
     if (validItems.length === 0) {
       newErrors.push('At least one checklist item is required.');
     }
-
-    // Check for duplicate names in group
     const existingNames = (group?.checklists || [])
       .filter(cl => isEditing ? cl.id !== checklist.id : true)
       .map(cl => cl.name.toLowerCase());
-    
     if (existingNames.includes(checklistName.trim().toLowerCase())) {
       newErrors.push('A checklist with this name already exists in this group.');
     }
-
     setErrors(newErrors);
     return newErrors.length === 0;
   };
 
-  // Function to send notification message to group members
   const sendChecklistNotification = async (checklistName, groupName, isCreated = true) => {
     try {
       const action = isCreated ? 'created' : 'updated';
       const messageText = `${user.username} has ${action} a new checklist "${checklistName}" in ${groupName}`;
-      
-      // Get group members who want to receive notifications
       const recipients = (group?.members || [])
-        .filter(member => 
-          member.userId !== user.userId && // Don't send to self
-          member.notifications?.checklists !== false // Only send if they haven't disabled checklist notifications
-        );
+        .filter(member => member.userId !== user.userId && member.notifications?.checklists !== false);
 
-      // Send individual messages to each recipient
       for (const member of recipients) {
         const sendingUserInfo = {
           userId: user.userId,
@@ -154,93 +148,44 @@ const GroupChecklistEditModal = ({
           groupName: groupName,
           screenForNavigation: {
             screen: 'Groups',
-            params: {
-                groupId: group.id || group.groupId,
-                highlightChecklist: checklistName
-            }
+            params: { groupId: group.id || group.groupId, highlightChecklist: checklistName }
           }
         };
-
         await addMessageToUser(member.userId, sendingUserInfo, messageText);
       }
-
       console.log(`✅ Checklist notification sent to ${recipients.length} group members`);
     } catch (error) {
       console.error('Error sending checklist notification:', error);
-      // Don't show error to user as this is a secondary action
     }
   };
 
   const handleSave = async () => {
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     try {
       const validItems = items.filter(item => item.text.trim()).map(item => item.text.trim());
       const currentChecklists = group?.checklists || [];
-      
       if (isEditing) {
-        // Update existing checklist
         const updatedChecklists = currentChecklists.map(cl => 
-          cl.id === checklist.id 
-            ? {
-                ...cl,
-                name: checklistName.trim(),
-                items: validItems.map((text, index) => {
-                  // Preserve existing item structure if it exists
-                  const existingItem = cl.items.find(item => item.text === text);
-                  return existingItem || {
-                    id: String(Date.now() + index),
-                    text: text,
-                    completed: false,
-                    createdBy: user.userId,
-                    createdAt: new Date().toISOString()
-                  };
-                }),
-                updatedAt: new Date().toISOString(),
-                updatedBy: { userId: user.userId, username: user.username }
-              }
-            : cl
+          cl.id === checklist.id ? { ...cl, name: checklistName.trim(), items: validItems.map((text, index) => {
+            const existingItem = cl.items.find(item => item.text === text);
+            return existingItem || { id: String(Date.now() + index), text: text, completed: false, createdBy: user.userId, createdAt: new Date().toISOString() };
+          }), updatedAt: new Date().toISOString(), updatedBy: { userId: user.userId, username: user.username } } : cl
         );
-
-        await updateDocument('groups', group.id || group.groupId, {
-          checklists: updatedChecklists,
-        });
-
+        await updateDocument('groups', group.id || group.groupId, { checklists: updatedChecklists });
         Alert.alert("Success", "Checklist updated successfully!");
-        
-        // Send notification for significant updates (optional)
-        // await sendChecklistNotification(checklistName.trim(), group.name, false);
-        
       } else {
-        // Create new checklist
         if (currentChecklists.length >= 5) {
           Alert.alert("Limit Reached", "Groups can only have up to 5 checklists. Please delete some to create new ones.");
           return;
         }
-
         const newChecklist = {
-          id: uuidv4(),
-          name: checklistName.trim(),
-          items: validItems,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdBy: { userId: user.userId, username: user.username },
-          updatedBy: { userId: user.userId, username: user.username }
+          id: uuidv4(), name: checklistName.trim(), items: validItems, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: { userId: user.userId, username: user.username }, updatedBy: { userId: user.userId, username: user.username }
         };
-
         const updatedChecklists = [...currentChecklists, newChecklist];
-        await updateDocument('groups', group.id || group.groupId, {
-          checklists: updatedChecklists,
-        });
-
+        await updateDocument('groups', group.id || group.groupId, { checklists: updatedChecklists });
         Alert.alert("Success", "Checklist created successfully!");
-        
-        // Send notification to group members about new checklist
         await sendChecklistNotification(checklistName.trim(), group.name, true);
       }
-
       if (onSave) onSave();
     } catch (error) {
       console.error('Error saving group checklist:', error);
@@ -315,7 +260,7 @@ const GroupChecklistEditModal = ({
       borderRadius: 8,
       padding: getSpacing.md,
       marginBottom: getSpacing.lg,
-      maxHeight: 300,
+      // Removed maxHeight
     },
     itemRow: {
       flexDirection: "row",
@@ -409,6 +354,7 @@ const GroupChecklistEditModal = ({
       <KeyboardAvoidingView 
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? -40 : 0}
       >
         <TouchableWithoutFeedback onPress={handleClose}>
           <View style={styles.overlay}>
@@ -445,48 +391,43 @@ const GroupChecklistEditModal = ({
                   {/* Items Section */}
                   <Text style={styles.sectionTitle}>Items</Text>
                   <View style={styles.itemsContainer}>
-                    <ScrollView 
-                      showsVerticalScrollIndicator={false}
-                      keyboardShouldPersistTaps="handled"
-                      nestedScrollEnabled={true}
-                    >
-                      {items.map((item, index) => (
-                        <View key={item.id} style={styles.itemRow}>
-                          <Text style={styles.itemNumber}>{index + 1}.</Text>
-                          
-                          <TextInput
-                            ref={ref => inputRefs.current[item.id] = ref}
-                            style={styles.itemInput}
-                            placeholder="Enter checklist item..."
-                            placeholderTextColor={theme.text.tertiary}
-                            value={item.text}
-                            onChangeText={(text) => updateItem(item.id, text)}
-                            onSubmitEditing={() => handleSubmitEditing(item.id)}
-                            returnKeyType="next"
-                            onBlur={() => handleBlur(item.id)}
-                            blurOnSubmit={false}
-                          />
-                          
-                          {item.text.trim() && (
-                            <TouchableOpacity
-                              onPress={() => removeItem(item.id)}
-                              style={styles.removeButton}
-                            >
-                              <Ionicons 
-                                name="trash-outline" 
-                                size={20} 
-                                color={theme.error || '#ef4444'} 
-                              />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      ))}
-                      
-                      <TouchableOpacity onPress={addItem} style={styles.addButton}>
-                        <Ionicons name="add" size={20} color={theme.primary} />
-                        <Text style={styles.addButtonText}>Add Item</Text>
-                      </TouchableOpacity>
-                    </ScrollView>
+                    {items.map((item, index) => (
+                      <View key={item.id} style={styles.itemRow}>
+                        <Text style={styles.itemNumber}>{index + 1}.</Text>
+                        
+                        <TextInput
+                          ref={ref => inputRefs.current[item.id] = ref}
+                          style={styles.itemInput}
+                          placeholder="Enter checklist item..."
+                          placeholderTextColor={theme.text.tertiary}
+                          value={item.text}
+                          onChangeText={(text) => updateItem(item.id, text)}
+                          onFocus={() => handleInputFocus(index)}
+                          onSubmitEditing={() => handleSubmitEditing(item.id)}
+                          returnKeyType="next"
+                          onBlur={() => handleBlur(item.id)}
+                          blurOnSubmit={false}
+                        />
+                        
+                        {item.text.trim() && (
+                          <TouchableOpacity
+                            onPress={() => removeItem(item.id)}
+                            style={styles.removeButton}
+                          >
+                            <Ionicons 
+                              name="trash-outline" 
+                              size={20} 
+                              color={theme.error || '#ef4444'} 
+                            />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))}
+                    
+                    <TouchableOpacity onPress={addItem} style={styles.addButton}>
+                      <Ionicons name="add" size={20} color={theme.primary} />
+                      <Text style={styles.addButtonText}>Add Item</Text>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Errors */}

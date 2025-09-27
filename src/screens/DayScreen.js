@@ -13,15 +13,36 @@ import { useData } from "../contexts/DataContext";
 import { Ionicons } from "@expo/vector-icons";
 import { DateTime } from "luxon";
 import EventCard from "../components/cards/EventCard/EventCard";
+import { useUserActions } from "../hooks";
+import LoadingScreen from "../components/LoadingScreen";
+import EventCreateEditModal from "../components/modals/EventCreateEditModal";
 
 const DayScreen = ({ navigation, route }) => {
-  const { theme, getSpacing, getTypography } = useTheme();
+  const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
   const { user, calendars, tasks, groups, setWorkingDate } = useData();
-  const { date: initialDate } = route.params || { date: DateTime.now().toISODate() };
-  
+  const { toggleEventVisibility } = useUserActions();
+  const { date: initialDate } = route.params || {
+    date: DateTime.now().toISODate(),
+  };
+
   const [currentDate, setCurrentDate] = useState(initialDate);
+  const [showHiddenEvents, setShowHiddenEvents] = useState(false);
+  const [updatingHiddenEvents, setUpdatingHiddenEvents] = useState(false);
+  const [createEditModalVisible, setCreateEditModalVisible] = useState(false);
 
   console.log("Tasks in DayScreen:", tasks);
+
+  const handleToggleEventVisibility = async (eventId, startTime, hideOrUnhide) => {
+    try {
+      setUpdatingHiddenEvents(true);
+      await toggleEventVisibility(eventId, startTime, hideOrUnhide);
+      // Pause briefly to ensure UI updates
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      setUpdatingHiddenEvents(false);
+    } catch (error) {
+      console.error("Error toggling event visibility:", error);
+    }
+  }
 
   // Update working date when current date changes
   useEffect(() => {
@@ -30,7 +51,9 @@ const DayScreen = ({ navigation, route }) => {
 
   // Navigation functions
   const goToPreviousDay = () => {
-    const previousDay = DateTime.fromISO(currentDate).minus({ days: 1 }).toISODate();
+    const previousDay = DateTime.fromISO(currentDate)
+      .minus({ days: 1 })
+      .toISODate();
     setCurrentDate(previousDay);
   };
 
@@ -42,8 +65,27 @@ const DayScreen = ({ navigation, route }) => {
   // Format date for header display
   const formatHeaderDate = (dateString) => {
     const date = DateTime.fromISO(dateString);
-    return date.toFormat('ccc LLL d'); // e.g., "Wed Sep 10"
+    return date.toFormat("ccc LLL d"); // e.g., "Wed Sep 10"
   };
+
+  // Helper function to check if an event has been hidden by user
+  const isEventHidden = (eventId) => {
+    console.log("Checking if event is hidden:", eventId, user?.hiddenEvents);
+    return (
+      user?.hiddenEvents?.some((hidden) => hidden.eventId === eventId) || false
+    );
+  };
+
+  // Build Hidden events for the selected date (in user.hiddenEvents)
+  const hiddenEventsForDate = useMemo(() => {
+    if (!user?.hiddenEvents || user.hiddenEvents.length === 0) return [];
+    const dayISO = currentDate;
+    return user.hiddenEvents.filter(
+      (hidden) => hidden.startTime === dayISO
+    );
+  }, [user?.hiddenEvents, currentDate]);
+
+  console.log("Hidden events for date", currentDate, ":", hiddenEventsForDate, user?.hiddenEvents);
 
   // Build events for the selected date
   const dayEvents = useMemo(() => {
@@ -68,13 +110,19 @@ const DayScreen = ({ navigation, route }) => {
             eventEnd.toISODate() === dayISO ||
             (eventStart <= dayEnd && eventEnd >= dayStart)
           ) {
-            events.push({
-              ...event,
-              eventId: eventKey,
-              calendarName: calendar.name,
-              calendarColor: calendar.color || theme.primary,
-              eventType: event.eventType || "event",
-            });
+            const isHidden = isEventHidden(eventKey);
+            
+            // Only filter out hidden events if showHiddenEvents is false
+            if (!isHidden || showHiddenEvents) {
+              events.push({
+                ...event,
+                eventId: eventKey,
+                calendarName: calendar.name,
+                calendarColor: calendar.color || theme.primary,
+                eventType: event.eventType || "event",
+                isHidden: isHidden, // Add this flag for potential styling
+              });
+            }
           }
         });
       }
@@ -84,7 +132,17 @@ const DayScreen = ({ navigation, route }) => {
       (a, b) => DateTime.fromISO(a.startTime) - DateTime.fromISO(b.startTime)
     );
     return events;
-  }, [calendars, currentDate, theme.primary]);
+  }, [calendars, currentDate, theme.primary, user?.hiddenEvents, showHiddenEvents]);
+
+  const editableCalendars = useMemo(() => {
+      // Return calendar objects from user.calendars that are internal with write permissions
+      if (!user?.calendars || user.calendars.length === 0) return [];
+    
+      return user.calendars.filter(
+        (cal) => cal.permissions === "write" && cal.calendarType === "internal"
+      );
+    }, [user?.calendars]);
+    console.log("Editable calendars:", editableCalendars);
 
   const styles = StyleSheet.create({
     container: {
@@ -93,7 +151,7 @@ const DayScreen = ({ navigation, route }) => {
     },
     safeArea: {
       flex: 1,
-      paddingTop: Platform.OS === 'ios' ? 0 : getSpacing.sm, // Adjust for status bar on Android
+      paddingTop: Platform.OS === "ios" ? 0 : getSpacing.sm,
     },
     header: {
       paddingHorizontal: getSpacing.lg,
@@ -127,6 +185,40 @@ const DayScreen = ({ navigation, route }) => {
       lineHeight: getTypography.h2.fontSize * 1,
       flexShrink: 1,
     },
+    backButton: {
+      padding: getSpacing.sm,
+      marginRight: getSpacing.sm,
+    },
+    // Hidden Events Toggle Styles
+    hiddenToggleContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: theme.surface,
+    },
+    hiddenToggleContent: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    hiddenToggleText: {
+      fontSize: getTypography.body.fontSize,
+      color: theme.text.secondary,
+      marginRight: getSpacing.sm,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderWidth: 2,
+      borderRadius: getBorderRadius.xs,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.background,
+    },
+    checkboxChecked: {
+      backgroundColor: theme.primary,
+      borderColor: theme.primary,
+    },
     content: {
       flex: 1,
       paddingHorizontal: getSpacing.md,
@@ -153,7 +245,37 @@ const DayScreen = ({ navigation, route }) => {
       color: theme.text.secondary,
       textAlign: "center",
     },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between', // Pushes elements to opposite ends
+      paddingHorizontal: getSpacing.lg,
+      paddingVertical: getSpacing.md,
+      backgroundColor: theme.surface,
+    },
+    fab: {
+      backgroundColor: theme.primary,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: "center",
+      alignItems: "center",
+      elevation: 4,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+    },
+    placeholderView: {
+      // This allows the empty View to take up space and push the FAB to the right
+      flex: 1, 
+      minWidth: 40, // Ensure it has enough width if flex: 1 is too aggressive
+    },
   });
+
+  if (updatingHiddenEvents) {
+    return <LoadingScreen message="Updating events..." />;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -183,17 +305,11 @@ const DayScreen = ({ navigation, route }) => {
               />
             </TouchableOpacity>
 
-            <Text
-              style={styles.headerTitle}
-              numberOfLines={1}
-            >
+            <Text style={styles.headerTitle} numberOfLines={1}>
               {formatHeaderDate(currentDate)}
             </Text>
 
-            <TouchableOpacity
-              style={styles.navButton}
-              onPress={goToNextDay}
-            >
+            <TouchableOpacity style={styles.navButton} onPress={goToNextDay}>
               <Ionicons
                 name="chevron-forward"
                 size={20}
@@ -202,6 +318,44 @@ const DayScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
         </View>
+
+        <View style={styles.headerRow}>
+  {/* Conditional Toggle or Empty View */}
+  {hiddenEventsForDate.length > 0 ? (
+    // CHILD 1: Hidden Events Toggle (shows on the left)
+    <TouchableOpacity 
+      style={styles.hiddenToggleContainer}
+      onPress={() => setShowHiddenEvents(!showHiddenEvents)}
+    >
+      <View style={styles.hiddenToggleContent}>
+        <Text style={styles.hiddenToggleText}>
+          Show Hidden Events ({hiddenEventsForDate.length})
+        </Text>
+        <View style={[styles.checkbox, showHiddenEvents && styles.checkboxChecked]}>
+          {showHiddenEvents && (
+            <Ionicons name="checkmark" size={14} color="white" />
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  ) : (
+    // PLACEHOLDER: An empty View that occupies the space of the toggle
+    // This maintains two children for 'space-between' to work correctly.
+    <View style={styles.placeholderView} /> 
+  )}
+  
+  {/* CHILD 2: FAB - Always positioned on the right */}
+  <TouchableOpacity
+    style={styles.fab}
+    onPress={() => setCreateEditModalVisible(true)}
+  >
+    <Ionicons
+      name="add"
+      size={20}
+      color={theme.button.secondaryText}
+    />
+  </TouchableOpacity>
+</View>
 
         {/* Content */}
         <View style={styles.content}>
@@ -227,7 +381,10 @@ const DayScreen = ({ navigation, route }) => {
                 <EventCard
                   event={item}
                   groups={groups}
+                  user={user}
                   calendars={calendars}
+                  isEventHidden={isEventHidden(item.eventId)}
+                  onToggleVisibility={handleToggleEventVisibility}
                   showCalendarName
                   tasks={tasks}
                   onPress={(event) =>
@@ -243,6 +400,13 @@ const DayScreen = ({ navigation, route }) => {
           )}
         </View>
       </View>
+      <EventCreateEditModal
+        isVisible={createEditModalVisible}
+        onClose={() => setCreateEditModalVisible(false)}
+        availableCalendars={editableCalendars}
+        initialDate={currentDate}
+        groups={groups}
+      />
     </SafeAreaView>
   );
 };

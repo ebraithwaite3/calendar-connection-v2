@@ -6,20 +6,19 @@ import {
   StyleSheet,
   Modal,
   TouchableWithoutFeedback,
-  Animated,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 
 const SlideOutMenu = ({ 
   isVisible, 
+  calendarsCount,
   onClose, 
   onLogout, 
   isDarkMode, 
-  toggleTheme,
-  unreadMessagesCount 
+  toggleTheme
 }) => {
-  const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
+  const { theme, getSpacing, getTypography } = useTheme();
   const navigation = useNavigation();
 
   const styles = StyleSheet.create({
@@ -45,35 +44,16 @@ const SlideOutMenu = ({
       borderBottomWidth: 1,
       borderBottomColor: theme.divider,
     },
-    menuItemContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flex: 1,
-    },
     menuItemText: {
       fontSize: getTypography.body.fontSize,
       color: theme.text.primary,
       marginLeft: getSpacing.sm,
+      flex: 1,
     },
     menuItemIcon: {
       width: 20,
       fontSize: 16,
       color: theme.text.secondary,
-    },
-    notificationBadge: {
-      backgroundColor: '#EF4444',
-      borderRadius: 10,
-      minWidth: 20,
-      height: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginLeft: 'auto',
-    },
-    notificationText: {
-      color: 'white',
-      fontSize: 12,
-      fontWeight: 'bold',
-      textAlign: 'center',
     },
     logoutItem: {
       borderBottomColor: theme.error,
@@ -89,6 +69,49 @@ const SlideOutMenu = ({
       fontSize: 24,
       color: theme.text.primary,
     },
+    // Option 1: Toggle Switch Style
+    toggleContainer: {
+      flexDirection: 'row',
+      backgroundColor: theme.button.secondary,
+      borderRadius: 16,
+      padding: 2,
+      marginLeft: 'auto',
+    },
+    toggleOption: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      fontSize: 12,
+      fontWeight: '500',
+      color: theme.text.secondary,
+      borderRadius: 14,
+    },
+    activeToggle: {
+      backgroundColor: theme.primary,
+      color: theme.text.inverse,
+    },
+    // Option 3: Visual Toggle
+    visualToggle: {
+      width: 44,
+      height: 24,
+      backgroundColor: theme.button.secondary,
+      borderRadius: 12,
+      padding: 2,
+      marginLeft: 'auto',
+      justifyContent: 'center',
+    },
+    toggleActive: {
+      backgroundColor: theme.primary,
+    },
+    toggleKnob: {
+      width: 20,
+      height: 20,
+      backgroundColor: theme.surface,
+      borderRadius: 10,
+      transform: [{ translateX: 0 }],
+    },
+    knobActive: {
+      transform: [{ translateX: 20 }],
+    },
   });
 
   const handleLogout = () => {
@@ -96,20 +119,9 @@ const SlideOutMenu = ({
     onLogout();
   };
 
-  const handleMessagesNavigation = () => {
+  const handleCalendarNavigation = () => {
     onClose();
-    navigation.navigate('Messages');
-  };
-
-  const handlePreferencesNavigation = () => {
-    onClose();
-    navigation.navigate('Preferences');
-  }
-
-  const formatNotificationCount = (count) => {
-    if (count <= 0) return '';
-    if (count > 99) return '99+';
-    return count.toString();
+    navigation.navigate('Calendar', { screen: 'CalendarEdit' });
   };
 
   return (
@@ -128,37 +140,20 @@ const SlideOutMenu = ({
                 <Text style={styles.closeText}>×</Text>
               </TouchableOpacity>
 
-              {/* Messages */}
-              <TouchableOpacity style={styles.menuItem} onPress={handleMessagesNavigation}>
-                <View style={styles.menuItemContent}>
-                  <Text style={styles.menuItemIcon}>💬</Text>
-                  <Text style={styles.menuItemText}>Messages</Text>
-                </View>
-                {unreadMessagesCount > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationText}>
-                      {formatNotificationCount(unreadMessagesCount)}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* Theme Toggle */}
+              {/* Option 1: Toggle Switch Style */}
               <TouchableOpacity style={styles.menuItem} onPress={toggleTheme}>
-                <Text style={styles.menuItemIcon}>
-                  {isDarkMode ? '☀️' : '🌙'}
-                </Text>
-                <Text style={styles.menuItemText}>
-                  {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-                </Text>
+                <Text style={styles.menuItemIcon}>🌓</Text>
+                <Text style={styles.menuItemText}>Theme</Text>
+                <View style={styles.toggleContainer}>
+                  <Text style={[styles.toggleOption, !isDarkMode && styles.activeToggle]}>Light</Text>
+                  <Text style={[styles.toggleOption, isDarkMode && styles.activeToggle]}>Dark</Text>
+                </View>
               </TouchableOpacity>
 
-              {/* Settings */}
-              <TouchableOpacity style={styles.menuItem} onPress={() => {
-                handlePreferencesNavigation();
-              }}>
-                <Text style={styles.menuItemIcon}>⚙️</Text>
-                <Text style={styles.menuItemText}>Preferences</Text>
+              {/* My Calendars */}
+              <TouchableOpacity style={styles.menuItem} onPress={handleCalendarNavigation}>
+                <Text style={styles.menuItemIcon}>📅</Text>
+                <Text style={styles.menuItemText}>My Calendars ({calendarsCount})</Text>
               </TouchableOpacity>
 
               {/* Logout */}

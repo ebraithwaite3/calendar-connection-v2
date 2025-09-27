@@ -88,9 +88,13 @@ const parseICalData = (icalData, calendarId) => {
   const lines = icalData.split('\n');
   const dateRange = getDateRange();
   
+  console.log('📅 Date range for sync:', dateRange);
+  
   let currentEvent = null;
   let eventId = null;
   let eventCount = 0;
+  let totalEventsFound = 0;
+  let filteredOutCount = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -98,12 +102,28 @@ const parseICalData = (icalData, calendarId) => {
     if (line === 'BEGIN:VEVENT') {
       currentEvent = {};
       eventId = null;
+      totalEventsFound++;
     } else if (line === 'END:VEVENT' && currentEvent && eventId) {
+      console.log('🚀 currentEvent before processEvent:', JSON.stringify(currentEvent));
       const event = processEvent(currentEvent, calendarId);
+      
+      console.log('🔍 Processing event:', {
+        eventId,
+        title: event?.title,
+        startTime: event?.startTime,
+        endTime: event?.endTime,
+        isValid: !!event
+      });
       
       if (event && isEventInRange(event, dateRange)) {
         events[eventId] = event;
         eventCount++;
+        console.log('✅ Event added:', eventId, event.title);
+      } else if (event) {
+        filteredOutCount++;
+        console.log('❌ Event filtered out (date range):', eventId, event.title, event.startTime);
+      } else {
+        console.log('❌ Event failed processing:', eventId);
       }
       
       currentEvent = null;
@@ -111,16 +131,25 @@ const parseICalData = (icalData, calendarId) => {
     } else if (currentEvent && line.includes(':')) {
       const [property, ...valueParts] = line.split(':');
       const value = valueParts.join(':');
+
+      console.log('📋 Raw line:', line);
+  console.log('🔍 Parsed property:', property, 'value:', value?.substring(0, 50) + '...');
       
       processEventProperty(currentEvent, property, value);
       
       if (property === 'UID') {
         eventId = `event-${value}`;
+        console.log('🆔 Event ID created:', eventId);
       }
     }
   }
 
-  console.log(`📅 Parsed ${eventCount} events from iCal data`);
+  console.log(`📊 Sync Summary:
+    - Total events found: ${totalEventsFound}
+    - Events processed: ${eventCount}
+    - Events filtered out: ${filteredOutCount}
+    - Final events object keys: ${Object.keys(events).length}`);
+    
   return events;
 };
 
@@ -128,34 +157,40 @@ const parseICalData = (icalData, calendarId) => {
  * Process individual event property
  */
 const processEventProperty = (event, property, value) => {
-  switch (property) {
+  console.log('🔧 Processing property:', property, 'with value:', value?.substring(0, 30));
+  console.log('🔧 Event object before:', JSON.stringify(event));
+  
+  // Extract base property name (remove parameters like ;TZID=America/New_York)
+  const baseProperty = property.split(';')[0];
+  
+  switch (baseProperty) {
     case 'SUMMARY':
       event.title = decodeICalText(value);
+      console.log('📝 Set title to:', event.title);
       break;
-    case 'DESCRIPTION':
-      event.description = decodeICalText(value);
+    case 'DTSTART':
+      event.startTime = value;
+      event.isAllDay = property.includes('VALUE=DATE');
+      console.log('🕐 Set startTime to:', event.startTime);
+      break;
+    case 'DTEND':
+      event.endTime = value;
+      console.log('🕕 Set endTime to:', event.endTime);
       break;
     case 'LOCATION':
       event.location = decodeICalText(value);
+      console.log('📍 Set location to:', event.location);
       break;
-    case 'DTSTART':
-    case 'DTSTART;VALUE=DATE':
-      event.startTime = value;
-      event.isAllDay = property.includes('VALUE=DATE');
-      break;
-    case 'DTEND':
-    case 'DTEND;VALUE=DATE':
-      event.endTime = value;
+    case 'DESCRIPTION':
+      event.description = decodeICalText(value);
+      console.log('📄 Set description to:', event.description?.substring(0, 30));
       break;
     default:
-      if (property.startsWith('DTSTART')) {
-        event.startTime = value;
-        event.isAllDay = property.includes('VALUE=DATE');
-      } else if (property.startsWith('DTEND')) {
-        event.endTime = value;
-      }
+      console.log('❓ Unhandled property:', baseProperty);
       break;
   }
+  
+  console.log('🔧 Event object after:', JSON.stringify(event));
 };
 
 /**
@@ -189,13 +224,19 @@ const processEvent = (rawEvent, calendarId) => {
  * Parse iCal date string to ISO format
  */
 const parseICalDate = (icalDate) => {
+  console.log('🗓️ parseICalDate input:', icalDate);
+  
   try {
     // UTC format: 20250710T080000Z
     if (icalDate.endsWith('Z')) {
-      return DateTime.fromFormat(icalDate, 'yyyyMMddTHHmmssZ').toISO();
+      // Convert to ISO format
+      const isoFormat = icalDate.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/, '$1-$2-$3T$4:$5:$6Z');
+      const result = DateTime.fromISO(isoFormat, { zone: 'utc' }).toISO();
+      console.log('🗓️ UTC format result:', result);
+      return result;
     }
     
-    // Local format: 20250710T080000
+    // Local timezone format: 20250710T080000 (assumes America/New_York)
     if (icalDate.match(/^\d{8}T\d{6}$/)) {
       const year = icalDate.substring(0, 4);
       const month = icalDate.substring(4, 6);
@@ -204,23 +245,32 @@ const parseICalDate = (icalDate) => {
       const minute = icalDate.substring(11, 13);
       const second = icalDate.substring(13, 15);
       
-      return DateTime.fromISO(`${year}-${month}-${day}T${hour}:${minute}:${second}`).toISO();
+      // Create ISO string and parse with America/New_York timezone
+      const isoString = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+      const result = DateTime.fromISO(isoString, { zone: 'America/New_York' }).toISO();
+      console.log('🗓️ Timezone-aware format result:', result);
+      return result;
     }
     
     // All-day format: 20250710
     if (icalDate.match(/^\d{8}$/)) {
-      return DateTime.fromFormat(icalDate, 'yyyyMMdd').toISO();
+      const result = DateTime.fromFormat(icalDate, 'yyyyMMdd').toISO();
+      console.log('🗓️ All-day format result:', result);
+      return result;
     }
     
     // Try direct ISO parsing
     const parsed = DateTime.fromISO(icalDate);
     if (parsed.isValid) {
-      return parsed.toISO();
+      const result = parsed.toISO();
+      console.log('🗓️ Direct ISO result:', result);
+      return result;
     }
     
+    console.log('🗓️ No format matched, returning null');
     return null;
   } catch (error) {
-    console.warn('Failed to parse iCal date:', icalDate, error);
+    console.warn('🗓️ Failed to parse iCal date:', icalDate, error);
     return null;
   }
 };

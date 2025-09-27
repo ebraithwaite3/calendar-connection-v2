@@ -83,6 +83,44 @@ export default function ImportCalendarScreen({ navigation }) {
     return false;
   };
 
+  // Function to clean and standardize calendar URLs
+const cleanCalendarUrl = (inputUrl) => {
+  let cleanedUrl = inputUrl.trim();
+  
+  // Handle Google redirect URLs
+  if (cleanedUrl.includes('google.com/url?q=')) {
+    try {
+      const urlObj = new URL(cleanedUrl);
+      const qParam = urlObj.searchParams.get('q');
+      if (qParam) {
+        cleanedUrl = decodeURIComponent(qParam);
+      }
+    } catch (error) {
+      console.warn('Failed to parse Google redirect URL:', error);
+    }
+  }
+  
+  // Handle other common redirect patterns
+  if (cleanedUrl.includes('redirect?url=')) {
+    try {
+      const urlObj = new URL(cleanedUrl);
+      const urlParam = urlObj.searchParams.get('url');
+      if (urlParam) {
+        cleanedUrl = decodeURIComponent(urlParam);
+      }
+    } catch (error) {
+      console.warn('Failed to parse redirect URL:', error);
+    }
+  }
+  
+  // Convert webcal:// to https://
+  if (cleanedUrl.startsWith('webcal://')) {
+    cleanedUrl = cleanedUrl.replace('webcal://', 'https://');
+  }
+  
+  return cleanedUrl;
+};
+
   const handleImport = async () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a calendar name');
@@ -94,7 +132,10 @@ export default function ImportCalendarScreen({ navigation }) {
       return;
     }
 
-    const urlIsValid = validateUrl(url, calendarType);
+    // Clean the URL before validation, if needed
+    const cleanedUrl = cleanCalendarUrl(url.trim());
+
+    const urlIsValid = validateUrl(cleanedUrl, calendarType);
     if (!urlIsValid) {
       Alert.alert('Error', 'Please enter a valid calendar URL');
       return;
@@ -102,7 +143,7 @@ export default function ImportCalendarScreen({ navigation }) {
 
     const calendarData = {
       name: name.trim(),
-      calendarAddress: url.trim(),
+      calendarAddress: cleanedUrl,
       type: calendarType,
       color,
       description: description.trim(),

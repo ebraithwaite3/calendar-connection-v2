@@ -28,7 +28,7 @@ const ChecklistCard = ({
     try {
       // Update the task in the database
       await updateTask(
-        groupId,
+        currentAssignment.isPersonalTask ? user.userId : groupId,
         currentAssignment.taskId,
         { notes: updatedNotes },
         user?.userId
@@ -74,6 +74,10 @@ const ChecklistCard = ({
 
   const usersWhoCanRespond = useMemo(() => {
     if (!thisGroup || !thisGroup.members || !currentAssignment) return [];
+
+    if (currentAssignment.isPersonalTask) {
+      return [user];
+    }
     
     // Handle both 'all' (string) and ['all'] (array containing 'all')
     // Also handle the new 'visibilityOption' field
@@ -175,12 +179,13 @@ const ChecklistCard = ({
               notes={notes}
               isEventPast={isEventPast}
               assignmentId={currentAssignment.taskId || currentAssignment.assignmentId}
-              groupId={groupId}
+              docId={currentAssignment.isPersonalTask ? user.userId : groupId}
               onNotesUpdate={onNotesUpdate}
           />
           <ChecklistResponses
             assignment={currentAssignment}
             groupId={groupId}
+            docId={currentAssignment.isPersonalTask ? user.userId : groupId}
             onAssignmentUpdate={handleAssignmentUpdate}
             isEventPast={isEventPast}
             thisGroup={thisGroup}

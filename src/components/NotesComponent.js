@@ -23,7 +23,7 @@ const NotesComponent = ({
   notes = [],
   isEventPast,
   assignmentId, // This might be taskId in your new structure
-  groupId,
+  docId,
 }) => {
   const { theme, getSpacing, getTypography } = useTheme();
   const { user } = useData();
@@ -109,7 +109,7 @@ const NotesComponent = ({
       const updatedNotes = [...localNotes, newNote];
       
       // Update the task in the database
-      const result = await updateTask(groupId, assignmentId, {
+      const result = await updateTask(docId, assignmentId, {
         notes: updatedNotes
       }, user?.userId);
 
@@ -148,7 +148,7 @@ const NotesComponent = ({
       );
 
       // Update the task in the database
-      const result = await updateTask(groupId, assignmentId, {
+      const result = await updateTask(docId, assignmentId, {
         notes: updatedNotes
       }, user?.userId);
 
@@ -191,7 +191,7 @@ const NotesComponent = ({
       const updatedNotes = localNotes.filter((_, index) => index !== noteIndex);
       
       // Update the task in the database
-      const result = await updateTask(groupId, assignmentId, {
+      const result = await updateTask(docId, assignmentId, {
         notes: updatedNotes
       }, user?.userId);
 

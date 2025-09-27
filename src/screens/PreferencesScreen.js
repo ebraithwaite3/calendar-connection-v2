@@ -96,8 +96,11 @@ const PreferencesScreen = ({navigation, route}) => {
         newPrefs.notifyFor = {
           ...prev.notifyFor,
           groupActivity: false,
-          newAssignments: false,
-          updatedAssignments: false,
+          newTasks: false,
+          deletedTasks: false,
+          newEvents: false,
+          updatedEvents: false,
+          deletedEvents: false,
         };
         setNotificationDetailsOpen(false);
       } else {
@@ -105,16 +108,21 @@ const PreferencesScreen = ({navigation, route}) => {
           newPrefs.notifyFor = {
             ...prev.notifyFor,
             groupActivity: preferences.notifyFor?.groupActivity || false,
-            newAssignments: preferences.notifyFor?.newAssignments || false,
-            updatedAssignments:
-              preferences.notifyFor?.updatedAssignments || false,
+            newTasks: preferences.notifyFor?.newTasks || false,
+            deletedTasks: preferences.notifyFor?.deletedTasks || false,
+            newEvents: preferences.notifyFor?.newEvents || false,
+            updatedEvents: preferences.notifyFor?.updatedEvents || false,
+            deletedEvents: preferences.notifyFor?.deletedEvents || false,
           };
         } else {
           newPrefs.notifyFor = {
             ...prev.notifyFor,
             groupActivity: true,
-            newAssignments: true,
-            updatedAssignments: true,
+            newTasks: true,
+            deletedTasks: true,
+            newEvents: true,
+            updatedEvents: true,
+            deletedEvents: true,
           };
         }
       }
@@ -361,8 +369,11 @@ const PreferencesScreen = ({navigation, route}) => {
 
   const notificationDetails = [
     { key: "groupActivity", label: "Group Activity" },
-    { key: "newAssignments", label: "New Assignments" },
-    { key: "updatedAssignments", label: "Updated Assignments" },
+    {key: "newTasks", label: "New Tasks" },
+    { key: "deletedTasks", label: "Deleted Tasks" },
+    { key: "newEvents", label: "New Events" },
+  { key: "updatedEvents", label: "Updated Events" },
+  { key: "deletedEvents", label: "Deleted Events" },
   ];
 
   return (

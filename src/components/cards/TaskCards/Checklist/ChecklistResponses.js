@@ -45,35 +45,42 @@ const ChecklistResponses = ({
     setIsEditMode(true);
   };
   
+  // 1. NEW: CONSOLIDATED SCROLL FUNCTION
+  const handleScrollToItem = (itemId) => {
+    // Keep focus logic separate but call scroll after a brief delay
+    setTimeout(() => {
+      const itemRef = itemRefs.current[itemId];
+      if (itemRef && parentScrollRef?.current) {
+        itemRef.measureLayout(
+          parentScrollRef.current,
+          (x, y, width, height) => {
+            // 2. INCREASED OFFSET TO AVOID SCROLLING TOO LOW
+            // 180 is a good starting point to clear the keyboard and header
+            const scrollY = y - 180; 
+            parentScrollRef.current.scrollTo({
+              y: scrollY > 0 ? scrollY : 0,
+              animated: true,
+            });
+          },
+          () => {
+            console.log("Failed to measure layout for scroll.");
+          }
+        );
+      }
+    }, 100);
+  };
+
+  // UPDATED: handleItemPress only handles view/edit mode logic
   const handleItemPress = (itemId) => {
     if (!isEditMode) {
       handleToggleComplete(itemId);
       return;
     }
   
+    // In edit mode, pressing the row simply focuses the input, 
+    // and the onFocus event on TextInput will handle scrolling.
     setFocusedItemId(itemId);
-  
-    // Use setTimeout to ensure the TextInput has been rendered
-    setTimeout(() => {
-      const itemRef = itemRefs.current[itemId];
-      if (itemRef && parentScrollRef?.current) {
-        // Correctly use measureLayout to get coordinates relative to the parent ScrollView
-        itemRef.measureLayout(
-          parentScrollRef.current,
-          (x, y, width, height) => {
-            const scrollY = y - 100;
-            parentScrollRef.current.scrollTo({
-              y: scrollY > 0 ? scrollY : 0,
-              animated: true,
-            });
-            itemRef.focus();
-          },
-          () => {
-            console.log("Failed to measure layout");
-          }
-        );
-      }
-    }, 100);
+    itemRefs.current[itemId]?.focus();
   };
 
   const updateEditedItem = (itemId, newText) => {
@@ -85,6 +92,7 @@ const ChecklistResponses = ({
 
   const completedCount = items.filter(item => item.completed).length;
 
+  // UPDATED: addNewItem uses the new consolidated scroll function
   const addNewItem = () => {
     const newItem = {
       id: Date.now().toString(),
@@ -98,22 +106,12 @@ const ChecklistResponses = ({
     setIdCounter(prev => prev + 1);
 
     setFocusedItemId(newItem.id);
+    
+    // Defer the focus and scroll to the end of the event loop
     setTimeout(() => {
-      const itemRef = itemRefs.current[newItem.id];
-      if (itemRef && parentScrollRef?.current) {
-        itemRef.measureLayout(
-          parentScrollRef.current,
-          (x, y, width, height) => {
-            const scrollY = y - 100;
-            parentScrollRef.current.scrollTo({
-              y: scrollY > 0 ? scrollY : 0,
-              animated: true,
-            });
-            itemRef.focus();
-          }
-        );
-      }
-    }, 100);
+        itemRefs.current[newItem.id]?.focus();
+        handleScrollToItem(newItem.id);
+    }, 150);
   };
 
   const deleteItem = (itemId) => {
@@ -136,7 +134,7 @@ const ChecklistResponses = ({
 
       // Save to database using updateTask
       await updateTask(
-        groupId,
+        assignment.isPersonalTask ? user.userId : groupId,
         assignment.taskId,
         updates,
         user?.userId
@@ -307,7 +305,11 @@ const ChecklistResponses = ({
                 onChangeText={(text) => updateEditedItem(item.id, text)}
                 placeholder="Enter item text..."
                 placeholderTextColor={theme.text.tertiary}
-                onFocus={() => setFocusedItemId(item.id)}
+                // 3. USE onFocus TO HANDLE SCROLL
+                onFocus={() => {
+                  setFocusedItemId(item.id);
+                  handleScrollToItem(item.id);
+                }}
                 onBlur={() => setFocusedItemId(null)}
               />
             ) : (

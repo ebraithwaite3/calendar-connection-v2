@@ -1,11 +1,13 @@
 // src/navigation/MainNavigator.js
 import React, { useState, useEffect } from 'react';
-import { Text } from 'react-native';
+import { Text, View, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useData } from '../contexts/DataContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Main screens
@@ -21,6 +23,7 @@ import JoinGroupScreen from '../screens/JoinGroupScreen';
 import MessagesScreen from '../screens/MessagesScreen';
 import CreateTaskScreen from '../screens/CreateTaskScreen';
 import DayScreen from '../screens/DayScreen';
+import CalendarEditScreen from '../screens/CalendarEditScreen';
 
 // Sub-screens
 import EventDetailsScreen from '../screens/EventDetailsScreen';
@@ -46,6 +49,7 @@ function TodayStackScreen() {
       <TodayStack.Screen name="AddScreen" component={AddScreen} />
       <TodayStack.Screen name="CreateTask" component={CreateTaskScreen} />
       <TodayStack.Screen name="ImportCalendar" component={ImportCalendarScreen} />
+      <TodayStack.Screen name="CalendarEdit" component={CalendarEditScreen} />
     </TodayStack.Navigator>
   );
 }
@@ -60,6 +64,7 @@ function CalendarStackScreen() {
       <CalendarStack.Screen name="ImportCalendar" component={ImportCalendarScreen} />
       <CalendarStack.Screen name="CreateTask" component={CreateTaskScreen} />
       <CalendarStack.Screen name="DayScreen" component={DayScreen} />
+      <CalendarStack.Screen name="CalendarEdit" component={CalendarEditScreen} />
     </CalendarStack.Navigator>
   );
 }
@@ -257,7 +262,9 @@ const MainNavigator = ({ onLogout }) => {
   const { theme, isDarkMode } = useTheme();
   const [initialRoute, setInitialRoute] = useState(null);
   const [isReady, setIsReady] = useState(false);
-  const { loading, user, unreadMessagesCount, unacceptedChecklistsCount, } = useData();
+  const { loading, user, unreadMessagesCount, unacceptedChecklistsCount, retryUserSubscription } = useData();
+  const { user: authUser } = useAuth();
+
   console.log("Unread messages in MainNavigator:", unreadMessagesCount);
 
   // Get the default page from the user doc
@@ -286,6 +293,11 @@ const MainNavigator = ({ onLogout }) => {
   if (loading || !isReady) {
     return <LoadingScreen />;
   }
+
+  // Check to see if we need to be able to retry auth
+  const showRetry = !loading && !user && authUser && isReady;
+  console.log("Show retry option:", showRetry);
+  console.log("Loading state:", loading, "User:", user, "AuthUser:", authUser, "isReady:", isReady);
 
   const linking = {
     prefixes: ['calendarconnectionv2://'],
@@ -334,6 +346,49 @@ const MainNavigator = ({ onLogout }) => {
       },
     },
   };
+
+  if (showRetry) {
+    return (
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        backgroundColor: theme.background,
+        paddingHorizontal: 20 
+      }}>
+        <Ionicons name="alert-circle-outline" size={64} color={theme.text.secondary} />
+        <Text style={{ 
+          fontSize: 18, 
+          color: theme.text.primary, 
+          marginVertical: 16,
+          textAlign: 'center' 
+        }}>
+          Unable to load your profile
+        </Text>
+        <Text style={{ 
+          fontSize: 14, 
+          color: theme.text.secondary, 
+          marginBottom: 24,
+          textAlign: 'center' 
+        }}>
+          Please check your connection and try again
+        </Text>
+        <TouchableOpacity 
+          style={{ 
+            backgroundColor: theme.primary, 
+            paddingHorizontal: 24, 
+            paddingVertical: 12, 
+            borderRadius: 8 
+          }}
+          onPress={retryUserSubscription}
+        >
+          <Text style={{ color: theme.text.inverse, fontWeight: '600', fontSize: 16 }}>
+            Retry
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer 

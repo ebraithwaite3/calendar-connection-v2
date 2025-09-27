@@ -23,6 +23,7 @@ import AttendanceForm from "../components/tasks/AttendanceForm";
 import TransportForm from "../components/tasks/TransportForm";
 import ListForm from "../components/tasks/ListForm";
 import { useTaskActions } from "../hooks";
+import { Ionicons } from "@expo/vector-icons";
 
 const CreateTaskScreen = ({ route, navigation }) => {
   const { theme, getSpacing, getTypography } = useTheme();
@@ -112,20 +113,57 @@ const CreateTaskScreen = ({ route, navigation }) => {
     calendarId
   );
 
-  // Format groups for GroupSelector component
+  // Create "Me" option as a personal group
+  const meOption = useMemo(() => {
+    if (!user?.userId) return null;
+    return {
+      groupId: "",  // <- Now empty string instead of prefixed ID
+      groupName: "Me",
+      isPersonal: true,
+      userId: user.userId,  // <- Added this new field
+      members: [{
+        userId: user.userId,
+        username: user.username,
+      }]
+    };
+  }, [user]);
+
+  // Format groups for GroupSelector component, including the "Me" option
   const userGroups = useMemo(() => {
-    return eventGroups.map((group) => ({
+    const groupOptions = eventGroups.map((group) => ({
       groupId: group.groupId,
       groupName: group.name,
+      isPersonal: false,
+      userId: "",  // <- No userId for regular groups
     }));
-  }, [eventGroups]);
+
+    // Always add "Me" option at the beginning if user exists
+    if (meOption) {
+      groupOptions.unshift({
+        groupId: meOption.groupId,
+        groupName: meOption.groupName,
+        isPersonal: true,
+        userId: meOption.userId,
+      });
+    }
+
+    return groupOptions;
+  }, [eventGroups, meOption]);
 
   // Get current group members for visibility selector
   const groupMembers = useMemo(() => {
-    if (!selectedGroup || !groups) return [];
+    if (!selectedGroup) return [];
+    
+    // If "Me" option is selected, return just the current user
+    if (selectedGroup.isPersonal && meOption) {
+      return meOption.members;
+    }
+    
+    // Otherwise, find the group from the groups data
+    if (!groups) return [];
     const fullGroup = groups.find((g) => g.groupId === selectedGroup.groupId);
     return fullGroup?.members || [];
-  }, [selectedGroup, groups]);
+  }, [selectedGroup, groups, meOption]);
 
   // Get all member IDs for "all" visibility option
   const allMemberIds = useMemo(() => {
@@ -133,7 +171,7 @@ const CreateTaskScreen = ({ route, navigation }) => {
     return groupMembers.map((member) => member.userId);
   }, [groupMembers]);
 
-  // useEffect if there's only 1 eventGroup, set that as the selectedGroup
+  // useEffect if there's only 1 group option (including Me), set that as the selectedGroup
   useEffect(() => {
     if (userGroups.length === 1) {
       setSelectedGroup(userGroups[0]);
@@ -208,7 +246,7 @@ const CreateTaskScreen = ({ route, navigation }) => {
     }
   }, [selectedTaskType, taskData, visibilityOption]);
 
-  const handleSubmit = async () => { // <-- Add 'async' here
+  const handleSubmit = async () => {
     // Check for errors from child components first
     if (errors.length > 0) {
       Alert.alert(
@@ -232,8 +270,6 @@ const CreateTaskScreen = ({ route, navigation }) => {
     // Clean up checklist items before submitting
     if (selectedTaskType === "Checklist") {
         const cleanedItems = (taskData.checklistData?.items || []).filter(item => item.text && item.text.trim() !== '');
-        // Note: The state update might not be immediate, but it's okay for now
-        // since the cleaned items are used in taskDataToSubmit.
         setTaskData(prev => ({
           ...prev,
           checklistData: {
@@ -251,6 +287,8 @@ const CreateTaskScreen = ({ route, navigation }) => {
       taskType: selectedTaskType,
       groupId: selectedGroup.groupId,
       groupName: selectedGroup.groupName,
+      isPersonalTask: selectedGroup.isPersonal, // Add flag for personal tasks
+      userId: selectedGroup.userId,
       notes: notes !== "" ? [{
         note: notes,
         author: user?.username,
@@ -268,7 +306,7 @@ const CreateTaskScreen = ({ route, navigation }) => {
     console.log("Submit new task", taskDataToSubmit);
 
     try {
-        await addTask(taskDataToSubmit, user?.userId); // <-- Add 'await' here
+        await addTask(taskDataToSubmit, user?.userId);
 
         // On successful submission
         Alert.alert(
@@ -398,6 +436,17 @@ const CreateTaskScreen = ({ route, navigation }) => {
     submitButtonText: {
       color: theme.text.inverse,
     },
+    backButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: getSpacing.md,
+      gap: getSpacing.sm, // Add space between icon and text
+    },
+    backButtonText: {
+      fontSize: getTypography.h2.fontSize,
+      fontWeight: getTypography.h2.fontWeight,
+      color: theme.text.primary,
+    },
   });
 
   return (
@@ -405,7 +454,7 @@ const CreateTaskScreen = ({ route, navigation }) => {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0} // Adjusted for iOS, 0 for Android
+        keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
       >
         <ScrollView
           ref={scrollViewRef}
@@ -413,6 +462,16 @@ const CreateTaskScreen = ({ route, navigation }) => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
+  <Ionicons
+    name="arrow-back"
+    size={28}
+    color={theme.text.primary}
+  />
+  <Text style={styles.backButtonText}>Back</Text>
+</TouchableOpacity>
+
+          {/* Event Header */}
           <EventHeader event={event} hideDetails={true} />
 
           <View style={styles.header}>
@@ -455,7 +514,7 @@ const CreateTaskScreen = ({ route, navigation }) => {
               userGroups={userGroups}
               selectedGroup={selectedGroup}
               onGroupSelect={handleGroupSelect}
-              sectionTitle="Select Group"
+              sectionTitle="Select Group or Personal Task"
             />
           )}
 
@@ -489,8 +548,8 @@ const CreateTaskScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          {/* Visibility Selection - Only show if task type and group are selected */}
-          {selectedTaskType && selectedGroup && (
+          {/* Visibility Selection - Only show if task type and group are selected and it's not a personal task */}
+          {selectedTaskType && selectedGroup && !selectedGroup.isPersonal && (
             <VisibilitySelector
               visibilityOption={visibilityOption}
               onVisibilityChange={handleVisibilityChange}

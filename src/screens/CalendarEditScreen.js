@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
   SafeAreaView,
   ActivityIndicator,
   Alert,
@@ -12,27 +13,33 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useData } from '../contexts/DataContext';
 import { useCalendarActions } from '../hooks/useCalendarActions';
 import { Ionicons } from '@expo/vector-icons';
+import CalendarCard from '../components/cards/CalendarCard/CalendarCard';
 
 const CalendarEditScreen = ({ navigation }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
-  const { calendars, calendarsLoading } = useData();
+  const { calendars, groups, calendarsLoading } = useData();
   const { syncCalendar } = useCalendarActions();
   const [syncing, setSyncing] = useState(false);
   const [syncingCalendars, setSyncingCalendars] = useState(new Set());
+
+  const externalCalendars = useMemo(() => {
+    return calendars.filter(cal => cal.type !== 'internal');
+  }, [calendars]);
+  console.log("External calendars:", externalCalendars);
 
   const handleImportCalendar = () => {
     navigation.navigate('ImportCalendar');
   };
 
   const handleSyncAllCalendars = async () => {
-    if (calendars.length === 0) {
-      Alert.alert('No Calendars', 'You need to import calendars before you can sync them.');
+    if (externalCalendars.length === 0) {
+      Alert.alert('No External Calendars', 'You need to import external calendars before you can sync them.');
       return;
     }
-
+  
     Alert.alert(
       'Sync All Calendars',
-      `Are you sure you want to sync all ${calendars.length} calendar(s)? This may take a moment.`,
+      `Are you sure you want to sync all ${externalCalendars.length} external calendar(s)? This may take a moment.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -43,10 +50,10 @@ const CalendarEditScreen = ({ navigation }) => {
             let successCount = 0;
             let errorCount = 0;
             const errors = [];
-
+  
             try {
-              // Sync all calendars in parallel
-              const syncPromises = calendars.map(async (calendar) => {
+              // Sync only external calendars in parallel
+              const syncPromises = externalCalendars.map(async (calendar) => {
                 const calendarId = calendar.calendarId || calendar.id;
                 setSyncingCalendars(prev => new Set([...prev, calendarId]));
                 
@@ -66,9 +73,9 @@ const CalendarEditScreen = ({ navigation }) => {
                   });
                 }
               });
-
+  
               await Promise.all(syncPromises);
-
+  
               // Show results
               if (errorCount === 0) {
                 Alert.alert(
@@ -201,45 +208,6 @@ const CalendarEditScreen = ({ navigation }) => {
     calendarsList: {
       paddingTop: getSpacing.md,
     },
-    calendarItem: {
-      backgroundColor: theme.surface,
-      padding: getSpacing.lg,
-      borderRadius: getBorderRadius.md,
-      marginBottom: getSpacing.md,
-      borderLeftWidth: 4,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
-      elevation: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    calendarInfo: {
-      flex: 1,
-    },
-    calendarName: {
-      fontSize: getTypography.h4.fontSize,
-      fontWeight: getTypography.h4.fontWeight,
-      color: theme.text.primary,
-      marginBottom: getSpacing.xs,
-    },
-    calendarDetails: {
-      fontSize: getTypography.bodySmall.fontSize,
-      color: theme.text.secondary,
-      marginBottom: getSpacing.xs,
-    },
-    syncStatus: {
-      fontSize: getTypography.bodySmall.fontSize,
-      fontWeight: '600',
-      marginTop: getSpacing.xs,
-    },
-    calendarActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: getSpacing.sm,
-    },
     fab: {
       backgroundColor: theme.primary,
       width: 40,
@@ -269,37 +237,12 @@ const CalendarEditScreen = ({ navigation }) => {
     syncButtonActive: {
       backgroundColor: theme.primary,
     },
-    syncCalendarButton: {
-      backgroundColor: theme.button.secondary,
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    syncCalendarButtonActive: {
-      backgroundColor: theme.primary,
+    backButton: {
+      marginRight: getSpacing.md,
+      padding: getSpacing.xs,
+      borderRadius: getBorderRadius.sm,
     },
   });
-
-  const getSyncStatusColor = (status) => {
-    switch (status) {
-      case 'success': return '#10B981';
-      case 'syncing': return '#F59E0B';
-      case 'error': return '#EF4444';
-      default: return theme.text.tertiary;
-    }
-  };
-
-  const getSyncStatusText = (status) => {
-    switch (status) {
-      case 'success': return 'Synced';
-      case 'syncing': return 'Syncing...';
-      case 'error': return 'Sync Error';
-      case 'pending': return 'Not Synced';
-      default: return 'Unknown';
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -307,15 +250,21 @@ const CalendarEditScreen = ({ navigation }) => {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.text.primary} />
+            </TouchableOpacity>
             <Text style={styles.headerTitle}>
-              {calendars?.length > 1 ? 'Calendars' : 'Calendar'}
+              My Calendars
             </Text>
           </View>
 
           {/* Header Actions */}
           <View style={styles.headerActions}>
             {/* Sync All Button - only show if we have calendars */}
-            {calendars.length > 0 && (
+            {externalCalendars.length > 0 && (
               <TouchableOpacity 
                 style={[styles.syncButton, (syncing || syncingCalendars.size > 0) && styles.syncButtonActive]} 
                 onPress={handleSyncAllCalendars}
@@ -367,67 +316,39 @@ const CalendarEditScreen = ({ navigation }) => {
             </View>
           ) : (
             // Calendars list
-            <View style={styles.calendarsList}>
-              {calendars.map((calendar) => {
+            <ScrollView 
+              style={styles.calendarsList}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: getSpacing.xl }}
+            >
+              {calendars
+                .sort((a, b) => {
+                  // Sort internal calendars first
+                  const aType = a.calendarType || a.type;
+                  const bType = b.calendarType || b.type;
+                  
+                  if (aType === 'internal' && bType !== 'internal') return -1;
+                  if (aType !== 'internal' && bType === 'internal') return 1;
+                  
+                  // Within same type, sort alphabetically by name
+                  return a.name.localeCompare(b.name);
+                })
+                .map((calendar) => {
                 const calendarId = calendar.calendarId || calendar.id;
                 const isCalendarSyncing = syncingCalendars.has(calendarId);
                 
                 return (
-                  <View 
-                    key={calendar.id} 
-                    style={[
-                      styles.calendarItem, 
-                      { borderLeftColor: calendar.color }
-                    ]}
-                  >
-                    <View style={styles.calendarInfo}>
-                      <Text style={styles.calendarName}>{calendar.name}</Text>
-                      <Text style={styles.calendarDetails}>
-                        {calendar.eventsCount || 0} events • {calendar.sourceType || calendar.type}
-                      </Text>
-                      {calendar.description && (
-                        <Text style={styles.calendarDetails}>
-                          {calendar.description}
-                        </Text>
-                      )}
-                      <Text 
-                        style={[
-                          styles.syncStatus, 
-                          { color: getSyncStatusColor(calendar.sync?.syncStatus || calendar.syncStatus) }
-                        ]}
-                      >
-                        {isCalendarSyncing ? 'Syncing...' : getSyncStatusText(calendar.sync?.syncStatus || calendar.syncStatus)}
-                        {calendar.sync?.lastSyncedAt && calendar.sync.syncStatus === 'success' && 
-                          ` • ${new Date(calendar.sync.lastSyncedAt).toLocaleDateString()}`
-                        }
-                      </Text>
-                    </View>
-
-                    {/* Individual Calendar Actions */}
-                    <View style={styles.calendarActions}>
-                      <TouchableOpacity
-                        style={[
-                          styles.syncCalendarButton,
-                          isCalendarSyncing && styles.syncCalendarButtonActive
-                        ]}
-                        onPress={() => handleSyncSingleCalendar(calendar)}
-                        disabled={isCalendarSyncing || syncing}
-                      >
-                        {isCalendarSyncing ? (
-                          <ActivityIndicator size="small" color={theme.text.inverse} />
-                        ) : (
-                          <Ionicons 
-                            name="sync" 
-                            size={16} 
-                            color={isCalendarSyncing ? theme.text.inverse : theme.button.secondaryText} 
-                          />
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                  <CalendarCard
+                    key={calendar.calendarId || calendar.id}
+                    calendar={calendar}
+                    groups={groups}
+                    isCalendarSyncing={isCalendarSyncing}
+                    onSyncCalendar={handleSyncSingleCalendar}
+                    syncing={syncing}
+                  />
                 );
               })}
-            </View>
+            </ScrollView>
           )}
         </View>
       </View>

@@ -18,24 +18,31 @@ import { useCalendarActions } from "../hooks";
 import { DateTime } from "luxon";
 import EventCard from "../components/cards/EventCard/EventCard";
 import LoadingScreen from "../components/LoadingScreen";
+import { useUserActions } from "../hooks";
+import EventCreateEditModal from "../components/modals/EventCreateEditModal";
 
 const TodayScreen = ({ navigation }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
-  const { 
-    user, 
-    calendars, 
-    tasks, 
-    groups, 
-    currentDate, 
-    setWorkingDate, 
-    loading, 
-    calendarsLoading 
+  const {
+    user,
+    calendars,
+    tasks,
+    groups,
+    currentDate,
+    setWorkingDate,
+    loading,
+    calendarsLoading,
   } = useData();
   const { syncCalendar } = useCalendarActions();
+  const { toggleEventVisibility } = useUserActions();
   const [syncing, setSyncing] = useState(false);
   const [syncingCalendars, setSyncingCalendars] = useState(new Set());
-  const [dataSettled, setDataSettled] = useState(false); // new state to track data settling
+  const [dataSettled, setDataSettled] = useState(false);
+  const [showHiddenEvents, setShowHiddenEvents] = useState(false);
+  const [createEditModalVisible, setCreateEditModalVisible] = useState(false);
+  
   console.log("Tasks in TodayScreen:", tasks);
+  console.log("CURRENT DATE IN TODAY SCREEN:", currentDate);
 
   // keep currentDate synced with "today" whenever screen is focused
   useFocusEffect(
@@ -49,28 +56,89 @@ const TodayScreen = ({ navigation }) => {
     }, [setWorkingDate, currentDate])
   );
 
+  const handleToggleEventVisibility = async (eventId, startTime, hideOrUnhide) => {
+    try {
+      // setUpdatingHiddenEvents(true);
+      await toggleEventVisibility(eventId, startTime, hideOrUnhide);
+      // // Pause briefly to ensure UI updates
+      // await new Promise((resolve) => setTimeout(resolve, 300));
+      // setUpdatingHiddenEvents(false);
+    } catch (error) {
+      console.error("Error toggling event visibility:", error);
+    }
+  }
+
   const handleImportCalendar = () => {
-    navigation.navigate("ImportCalendar");
+    if (calendars.length < 2) {
+      // If its less than 2, that means they only have their internal user calendar
+      // So give them the option to import a calendar
+      navigation.navigate("ImportCalendar");
+    } else {
+      // Navigate to the CalendarEdit screen if there are already calendars
+      navigation.navigate("CalendarEdit");
+    }
   };
+
+  const externalCalendars = useMemo(() => {
+    return calendars.filter(cal => cal.type !== 'internal');
+  }, [calendars]);
+
+  console.log("External calendars:", externalCalendars);
 
   // Loading state check to prevent flicker
   const hasConfiguredCalendars = user?.calendars && user.calendars.length > 0;
-  const calendarsHaveEvents = calendars.some(cal => cal.events && Object.keys(cal.events).length > 0);
-  const isDataLoading = loading || calendarsLoading || (hasConfiguredCalendars && calendars.length === 0) || !dataSettled || (hasConfiguredCalendars && !calendarsHaveEvents);
+  const calendarsHaveEvents = calendars.some(
+    (cal) => cal.type === 'internal' || (cal.events && Object.keys(cal.events).length > 0)
+  );
+  const isDataLoading =
+    loading ||
+    calendarsLoading ||
+    (hasConfiguredCalendars && calendars.length === 0) ||
+    !dataSettled ||
+    (hasConfiguredCalendars && !calendarsHaveEvents);
+    console.log("IS DATA LOADING?", isDataLoading, { loading, calendarsLoading, hasConfiguredCalendars, calendarsLength: calendars.length, dataSettled, calendarsHaveEvents });
 
   // Effect to handle data settling
   useEffect(() => {
-    if (!loading && !calendarsLoading && (!hasConfiguredCalendars || calendarsHaveEvents)) {
+    if (
+      !loading &&
+      !calendarsLoading &&
+      (!hasConfiguredCalendars || calendarsHaveEvents)
+    ) {
       // Add a small delay to let all state updates complete
       const timer = setTimeout(() => {
         setDataSettled(true);
       }, 100); // 100ms delay
-      
+
       return () => clearTimeout(timer);
     } else {
       setDataSettled(false);
     }
   }, [loading, calendarsLoading, hasConfiguredCalendars, calendarsHaveEvents]);
+
+  // Helper function to check if an event has been hidden by user
+  const isEventHidden = (eventId) => {
+    console.log("Checking if event is hidden:", eventId, user?.hiddenEvents);
+    return (
+      user?.hiddenEvents?.some((hidden) => hidden.eventId === eventId) || false
+    );
+  };
+
+  // Build today's Hidden Events (to show a checkbox at the top to show the hidden events)
+  // Should be looking in user.hiddenEvents for any events with startTime as todays data (just in the format of 2025-09-22)
+  const todaysHiddenEvents = useMemo(() => {
+    if (!user?.hiddenEvents || user.hiddenEvents.length === 0) return [];
+
+    const todayISO = currentDate;
+
+    return user.hiddenEvents.filter((hidden) => {
+      if (!hidden.startTime) return false;
+      const hiddenDate = DateTime.fromISO(hidden.startTime).toISODate();
+      return hiddenDate === todayISO;
+    });
+  }, [user?.hiddenEvents, currentDate]);
+
+  console.log("Today's hidden events:", todaysHiddenEvents);
 
   // build today's events
   const todaysEvents = useMemo(() => {
@@ -95,13 +163,19 @@ const TodayScreen = ({ navigation }) => {
             eventEnd.toISODate() === todayISO ||
             (eventStart <= todayEnd && eventEnd >= todayStart)
           ) {
-            events.push({
-              ...event,
-              eventId: eventKey,
-              calendarName: calendar.name,
-              calendarColor: calendar.color || theme.primary,
-              eventType: event.eventType || "event",
-            });
+            const isHidden = isEventHidden(eventKey);
+            
+            // Only filter out hidden events if showHiddenEvents is false
+            if (!isHidden || showHiddenEvents) {
+              events.push({
+                ...event,
+                eventId: eventKey,
+                calendarName: calendar.name,
+                calendarColor: calendar.color || theme.primary,
+                eventType: event.eventType || "event",
+                isHidden: isHidden,
+              });
+            }
           }
         });
       }
@@ -111,7 +185,7 @@ const TodayScreen = ({ navigation }) => {
       (a, b) => DateTime.fromISO(a.startTime) - DateTime.fromISO(b.startTime)
     );
     return events;
-  }, [calendars, currentDate, theme.primary]);
+  }, [calendars, currentDate, theme.primary, user?.hiddenEvents, showHiddenEvents]);
 
   // sync handler
   const handleSyncAllCalendars = async () => {
@@ -125,7 +199,7 @@ const TodayScreen = ({ navigation }) => {
 
     Alert.alert(
       "Sync All Calendars",
-      `Are you sure you want to sync all ${calendars.length} calendar(s)?`,
+      `Are you sure you want to sync all ${externalCalendars.length} calendar(s)?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -138,24 +212,26 @@ const TodayScreen = ({ navigation }) => {
 
             try {
               await Promise.all(
-                calendars.map(async (calendar) => {
-                  const calendarId = calendar.calendarId || calendar.id;
-                  setSyncingCalendars((prev) => new Set([...prev, calendarId]));
-
-                  try {
-                    await syncCalendar(calendarId);
-                    successCount++;
-                  } catch (error) {
-                    errorCount++;
-                    errors.push(`${calendar.name}: ${error.message}`);
-                  } finally {
-                    setSyncingCalendars((prev) => {
-                      const newSet = new Set(prev);
-                      newSet.delete(calendarId);
-                      return newSet;
-                    });
-                  }
-                })
+                calendars
+                  .filter(calendar => calendar.type !== 'internal') // Skip internal calendars
+                  .map(async (calendar) => {
+                    const calendarId = calendar.calendarId || calendar.id;
+                    setSyncingCalendars((prev) => new Set([...prev, calendarId]));
+              
+                    try {
+                      await syncCalendar(calendarId);
+                      successCount++;
+                    } catch (error) {
+                      errorCount++;
+                      errors.push(`${calendar.name}: ${error.message}`);
+                    } finally {
+                      setSyncingCalendars((prev) => {
+                        const newSet = new Set(prev);
+                        newSet.delete(calendarId);
+                        return newSet;
+                      });
+                    }
+                  })
               );
 
               if (errorCount === 0) {
@@ -185,6 +261,18 @@ const TodayScreen = ({ navigation }) => {
       ]
     );
   };
+
+  const editableCalendars = useMemo(() => {
+    // Return calendar objects from user.calendars that are internal with write permissions
+    if (!user?.calendars || user.calendars.length === 0) return [];
+  
+    return user.calendars.filter(
+      (cal) => cal.permissions === "write" && cal.calendarType === "internal"
+    );
+  }, [user?.calendars]);
+  console.log("Editable calendars:", editableCalendars);
+      
+
 
   const styles = StyleSheet.create({
     container: {
@@ -229,6 +317,40 @@ const TodayScreen = ({ navigation }) => {
     },
     syncButtonActive: {
       backgroundColor: theme.primary,
+    },
+    // Hidden Events Toggle Styles
+    hiddenToggleContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: getSpacing.lg,
+      paddingVertical: getSpacing.md,
+      backgroundColor: theme.surface,
+    },
+    hiddenToggleContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      flex: 1,
+    },
+    hiddenToggleText: {
+      fontSize: getTypography.body.fontSize,
+      color: theme.text.secondary,
+      marginRight: getSpacing.sm,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderWidth: 2,
+      borderRadius: getBorderRadius.xs,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.background,
+    },
+    checkboxChecked: {
+      backgroundColor: theme.primary,
+      borderColor: theme.primary,
     },
     content: {
       flex: 1,
@@ -300,7 +422,7 @@ const TodayScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Today</Text>
 
           <View style={styles.headerActions}>
-            {calendars.length > 0 && (
+            {externalCalendars.length > 0 && (
               <TouchableOpacity
                 style={[
                   styles.syncButton,
@@ -323,37 +445,66 @@ const TodayScreen = ({ navigation }) => {
             )}
 
             {/* Add Calendar Button */}
-            {/* Add Calendar Button */}
-<TouchableOpacity
-  style={[
-    styles.fab,
-    calendars?.length === 0 && {
-      width: 'auto',
-      height: 'auto',
-      paddingHorizontal: getSpacing.lg,
-      paddingVertical: getSpacing.md,
-      borderRadius: getBorderRadius.lg,
-    }
-  ]}
-  onPress={handleImportCalendar}
-  disabled={syncing}
->
-  {calendars?.length === 0 ? (
-    <Text
-      style={{
-        color: theme.text.inverse,
-        fontSize: getTypography.body.fontSize,
-        fontWeight: "bold",
-      }}
-    >
-      Import a Calendar
-    </Text>
-  ) : (
-    <Ionicons name="add" size={24} color={theme.text.inverse} />
-  )}
-</TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.fab,
+                externalCalendars?.length === 0 && {
+                  width: "auto",
+                  height: "auto",
+                  paddingHorizontal: getSpacing.sm,
+                  paddingVertical: getSpacing.md,
+                  borderRadius: getBorderRadius.lg,
+                },
+              ]}
+              onPress={handleImportCalendar}
+              disabled={syncing}
+            >
+              {externalCalendars?.length === 0 ? (
+                <Text
+                  style={{
+                    color: theme.text.inverse,
+                    fontSize: getTypography.body.fontSize,
+                    fontWeight: "bold",
+                  }}
+                >
+                  Import a Calendar
+                </Text>
+              ) : (
+                <Ionicons
+                  name="calendar"
+                  size={24}
+                  color={theme.text.inverse}
+                />
+              )}
+            </TouchableOpacity>
+            {/* Add a plus button for adding an event, for now just console log */}
+            <TouchableOpacity
+              style={styles.fab}
+              onPress={() => setCreateEditModalVisible(true)}
+            >
+              <Ionicons name="add" size={24} color={theme.text.inverse} />
+            </TouchableOpacity>
           </View>
         </View>
+
+        {/* Hidden Events Toggle - Only show if there are hidden events for today */}
+        {todaysHiddenEvents.length > 0 && (
+          <TouchableOpacity 
+            style={styles.hiddenToggleContainer}
+            onPress={() => setShowHiddenEvents(!showHiddenEvents)}
+          >
+            <View style={styles.hiddenToggleContent}>
+              <Text style={styles.hiddenToggleText}>
+                Show Hidden Events ({todaysHiddenEvents.length})
+              </Text>
+              <View style={[styles.checkbox, showHiddenEvents && styles.checkboxChecked]}>
+                {showHiddenEvents && (
+                  <Ionicons name="checkmark" size={14} color="white" />
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Content */}
         <View style={styles.content}>
@@ -368,7 +519,7 @@ const TodayScreen = ({ navigation }) => {
               />
               <Text style={styles.emptyTitle}>No Events Today</Text>
               <Text style={styles.emptySubtitle}>
-                {hasConfiguredCalendars 
+                {hasConfiguredCalendars
                   ? "Enjoy your free day! Sync your calendars to see upcoming events."
                   : "Add calendars to see your events here."}
               </Text>
@@ -383,7 +534,10 @@ const TodayScreen = ({ navigation }) => {
                 <EventCard
                   event={item}
                   groups={groups}
+                  user={user}
                   calendars={calendars}
+                  isEventHidden={isEventHidden(item.eventId)}
+                  onToggleVisibility={handleToggleEventVisibility}
                   showCalendarName
                   tasks={tasks}
                   onPress={(event) =>
@@ -399,6 +553,13 @@ const TodayScreen = ({ navigation }) => {
           )}
         </View>
       </View>
+      <EventCreateEditModal
+        isVisible={createEditModalVisible}
+        onClose={() => setCreateEditModalVisible(false)}
+        availableCalendars={editableCalendars}
+        initialDate={currentDate}
+        groups={groups}
+      />
     </SafeAreaView>
   );
 };

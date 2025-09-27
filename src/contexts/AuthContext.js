@@ -3,9 +3,10 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { initializeAuth, initializeFirestore } from '../config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteDoc } from 'firebase/firestore';
-import { getDocumentsByField, updateDocument } from '../services/firestoreService';
+import { getDocumentsByField, updateDocument, deleteDocument } from '../services/firestoreService';
 import { addMessageToUser } from '../services/messageService';
 import { DateTime } from 'luxon';
+import * as Crypto from 'expo-crypto';
 
 
 const AuthContext = createContext();
@@ -18,6 +19,8 @@ export const AuthProvider = ({ children }) => {
   const [auth, setAuth] = useState(null);
   const [db, setDb] = useState(null);
   console.log("DB STATE:", db);
+
+  const uuidv4 = () => Crypto.randomUUID();
 
   useEffect(() => {
     const setupAuth = async () => {
@@ -115,11 +118,14 @@ export const AuthProvider = ({ children }) => {
               groupActivity: notifications,
               newTasks: notifications,
               updatedTasks: notifications,
-              deleteTasks: notifications,
+              deletedTasks: notifications,
               newNotes: notifications,
               mentions: notifications,
               reminders: notifications,
               messages: notifications,
+              newEvents: notifications,
+              updatedEvents: notifications,
+              deletedEvents: notifications,
             }
           },
           ...additionalData
@@ -142,6 +148,77 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Function to create individual task document for user
+  const createIndividualTaskDoc = async (userId, username) => {
+    if (!userId || typeof userId !== 'string') {
+      throw new Error("Invalid user ID");
+    }
+    if (!username || typeof username !== 'string') {
+      throw new Error("Invalid username");
+    }
+  
+    try {
+      const firestoreModule = await import('firebase/firestore');
+      const createdAt = DateTime.now().toISO();
+      
+      const taskData = {
+        userId: userId,
+        name: `${username}'s Tasks`,
+        createdBy: { userId, username },
+        createdDate: createdAt,
+        updatedDate: createdAt,
+        tasks: [],
+      };
+  
+      const taskRef = firestoreModule.doc(db, "tasks", userId);
+      await firestoreModule.setDoc(taskRef, taskData);
+      console.log("Individual Task document created for user:", userId);
+      
+      return taskData;
+    } catch (error) {
+      console.error("Error creating individual task document:", error);
+      throw error;
+    }
+  };
+  
+  // Function to create internal calendar for user
+  const createUserInternalCalendar = async (userId, username, calendarId) => {
+    if (!userId || typeof userId !== 'string') {
+      throw new Error("Invalid user ID");
+    }
+    if (!username || typeof username !== 'string') {
+      throw new Error("Invalid username");
+    }
+  
+    try {
+      const firestoreModule = await import('firebase/firestore');
+      console.log("Creating internal calendar for user:", userId, username);
+  
+      const internalCalendarData = {
+        admins: [userId],
+        calendarId: calendarId,
+        color: '#02092b',
+        createdAt: DateTime.now().toISO(),
+        createdBy: userId,
+        description: `${username}'s Personal Calendar`,
+        events: {},
+        isActive: true,
+        name: `${username}'s Calendar`,
+        subscribingUsers: [userId],
+        type: 'internal',
+        updatedAt: DateTime.now().toISO(),
+      };
+      
+      const calendarRef = firestoreModule.doc(db, 'calendars', calendarId);
+      await firestoreModule.setDoc(calendarRef, internalCalendarData);
+      console.log("Internal calendar created with ID:", calendarId);
+      return internalCalendarData;
+    } catch (error) {
+      console.error("Error creating internal calendar:", error);
+      throw error;
+    }
+  };
+
   const login = async (email, password) => {
     if (!auth) throw new Error('Auth not initialized');
     const authModule = await import('firebase/auth');
@@ -160,7 +237,10 @@ export const AuthProvider = ({ children }) => {
     // Step 1: Create Firebase auth user first (outside the atomic block)
     const result = await authModule.createUserWithEmailAndPassword(auth, email, password);
     
-    // ATOMIC OPERATIONS: Create user document and message document
+    // Declare variables for rollback
+    let userCalendarId = null;
+    
+    // ATOMIC OPERATIONS: Create user document and related documents
     try {
       // Step 2: Check for stored invites before creating user document
       let pendingInvites = [];
@@ -185,7 +265,7 @@ export const AuthProvider = ({ children }) => {
             groupName: invite.groupName,
             inviteCode: invite.inviteCode,
             role: invite.role,
-            inviterUserId: invite.inviterUserId || 'unknown', // fallback if missing
+            inviterUserId: invite.inviterUserId || 'unknown',
             inviterName: invite.inviterName,
             invitedAt: invite.invitedAt || DateTime.now().toISO(),
             status: 'pending'
@@ -207,13 +287,39 @@ export const AuthProvider = ({ children }) => {
   
       // Step 3: Create user document (now with pending invites)
       await createUserDocument(result.user, username, notifications, pendingInvites);
-      console.log('✅ User document created');
+      console.log('User document created');
   
       // Step 4: Create message document
       await createMessageDoc(result.user.uid);
-      console.log('✅ Message document created');
+      console.log('Message document created');
+  
+      // Step 5: Create internal calendar doc for user
+      userCalendarId = uuidv4();
+      await createUserInternalCalendar(result.user.uid, username, userCalendarId);
+      console.log('Internal calendar created');
+  
+      // Step 6: Add calendar reference to user document
+      const userCalendarRef = {
+        calendarId: userCalendarId,
+        name: `${username}'s Calendar`,
+        calendarType: "internal",
+        isOwner: true,
+        permissions: "write",
+        color: "#02092b",
+        description: `${username}'s Personal Calendar`,
+        importedBy: result.user.uid,
+      };
+  
+      await updateDocument("users", result.user.uid, {
+        calendars: [userCalendarRef]
+      });
+      console.log('Calendar reference added to user document');
+  
+      // Step 7: Create users individual task doc
+      await createIndividualTaskDoc(result.user.uid, username);
+      console.log('Individual task document created');
       
-      // Step 5: Send welcome messages for any pending invites
+      // Step 8: Send welcome messages for any pending invites
       if (pendingInvites.length > 0) {
         for (const invite of pendingInvites) {
           const messageText = `Welcome! You have a pending invitation to join ${invite.groupName} from ${invite.inviterName}. Check your Groups section to accept or decline.`;
@@ -230,18 +336,43 @@ export const AuthProvider = ({ children }) => {
           await addMessageToUser(result.user.uid, sendingUserInfo, messageText);
         }
         
-        console.log(`✅ Sent ${pendingInvites.length} welcome message(s) for pending invites`);
+        console.log(`Sent ${pendingInvites.length} welcome message(s) for pending invites`);
       }
   
     } catch (error) {
-      console.error('❌ Atomic operation failed:', error);
+      console.error('Atomic operation failed:', error);
       
-      // Rollback: Delete Firebase auth user if document creation failed
+      // Rollback: Delete all created documents
+      const rollbackPromises = [
+        deleteDocument("users", result.user.uid).catch(err => 
+          console.error("User rollback failed:", err)
+        ),
+        deleteDocument("messages", result.user.uid).catch(err => 
+          console.error("Messages rollback failed:", err)
+        ),
+        deleteDocument("tasks", result.user.uid).catch(err => 
+          console.error("Tasks rollback failed:", err)
+        )
+      ];
+  
+      // Only try to delete calendar if it was created
+      if (userCalendarId) {
+        rollbackPromises.push(
+          deleteDocument("calendars", userCalendarId).catch(err => 
+            console.error("Calendar rollback failed:", err)
+          )
+        );
+      }
+  
+      await Promise.allSettled(rollbackPromises);
+      console.log('Rollback operations completed');
+      
+      // Delete Firebase auth user since document creation failed
       try {
         await result.user.delete();
-        console.log('🔄 Rollback: Firebase auth user deleted');
+        console.log('Rollback: Firebase auth user deleted');
       } catch (rollbackError) {
-        console.error('❌ Rollback failed:', rollbackError);
+        console.error('Auth user rollback failed:', rollbackError);
       }
       
       throw new Error("Failed to create complete user profile");
