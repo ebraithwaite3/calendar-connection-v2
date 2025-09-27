@@ -1,5 +1,5 @@
 // src/screens/TodayScreen.js
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
@@ -37,9 +37,9 @@ const TodayScreen = ({ navigation }) => {
   const { toggleEventVisibility } = useUserActions();
   const [syncing, setSyncing] = useState(false);
   const [syncingCalendars, setSyncingCalendars] = useState(new Set());
-  const [dataSettled, setDataSettled] = useState(false);
   const [showHiddenEvents, setShowHiddenEvents] = useState(false);
   const [createEditModalVisible, setCreateEditModalVisible] = useState(false);
+  const [initialRender, setInitialRender] = useState(true);
   
   console.log("Tasks in TodayScreen:", tasks);
   console.log("CURRENT DATE IN TODAY SCREEN:", currentDate);
@@ -55,6 +55,17 @@ const TodayScreen = ({ navigation }) => {
       setWorkingDate(today);
     }, [setWorkingDate, currentDate])
   );
+
+  // Add this useEffect after the useFocusEffect
+useEffect(() => {
+  if (!loading && !calendarsLoading) {
+    // Small delay only on initial render to prevent flash
+    const timer = setTimeout(() => {
+      setInitialRender(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }
+}, [loading, calendarsLoading]);
 
   const handleToggleEventVisibility = async (eventId, startTime, hideOrUnhide) => {
     try {
@@ -85,36 +96,10 @@ const TodayScreen = ({ navigation }) => {
 
   console.log("External calendars:", externalCalendars);
 
-  // Loading state check to prevent flicker
-  const hasConfiguredCalendars = user?.calendars && user.calendars.length > 0;
-  const calendarsHaveEvents = calendars.some(
-    (cal) => cal.type === 'internal' || (cal.events && Object.keys(cal.events).length > 0)
-  );
-  const isDataLoading =
-    loading ||
-    calendarsLoading ||
-    (hasConfiguredCalendars && calendars.length === 0) ||
-    !dataSettled ||
-    (hasConfiguredCalendars && !calendarsHaveEvents);
-    console.log("IS DATA LOADING?", isDataLoading, { loading, calendarsLoading, hasConfiguredCalendars, calendarsLength: calendars.length, dataSettled, calendarsHaveEvents });
+  // Simplified loading check - no more complex logic or artificial delays
+  const isDataLoading = loading || calendarsLoading || initialRender;
 
-  // Effect to handle data settling
-  useEffect(() => {
-    if (
-      !loading &&
-      !calendarsLoading &&
-      (!hasConfiguredCalendars || calendarsHaveEvents)
-    ) {
-      // Add a small delay to let all state updates complete
-      const timer = setTimeout(() => {
-        setDataSettled(true);
-      }, 100); // 100ms delay
-
-      return () => clearTimeout(timer);
-    } else {
-      setDataSettled(false);
-    }
-  }, [loading, calendarsLoading, hasConfiguredCalendars, calendarsHaveEvents]);
+  console.log("IS DATA LOADING?", isDataLoading, { loading, calendarsLoading });
 
   // Helper function to check if an event has been hidden by user
   const isEventHidden = (eventId) => {
@@ -271,8 +256,8 @@ const TodayScreen = ({ navigation }) => {
     );
   }, [user?.calendars]);
   console.log("Editable calendars:", editableCalendars);
-      
 
+  const hasConfiguredCalendars = user?.calendars && user.calendars.length > 0;
 
   const styles = StyleSheet.create({
     container: {

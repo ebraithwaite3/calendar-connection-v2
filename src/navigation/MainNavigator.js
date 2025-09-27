@@ -294,6 +294,15 @@ const MainNavigator = ({ onLogout }) => {
     return <LoadingScreen />;
   }
 
+  // Add diagnostic log
+  console.log("Retry diagnostic:", {
+    loading,
+    user: !!user,
+    authUser: !!authUser,
+    isReady,
+    showRetry: !loading && !user && authUser && isReady,
+  });
+
   // Check to see if we need to be able to retry auth
   const showRetry = !loading && !user && authUser && isReady;
   console.log("Show retry option:", showRetry);
