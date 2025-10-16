@@ -419,6 +419,8 @@ export const useCalendarActions = () => {
       throw error;
     }
   }, [authUser?.uid, user?.userId, user?.username]);
+
+
   const updateEventInCalendar = useCallback(async (calendarId, eventData, groupsWithSelectedCalendar, groups) => {
     if (!authUser?.uid) {
       throw new Error("User not authenticated");
@@ -549,6 +551,76 @@ export const useCalendarActions = () => {
     }
   }, [authUser?.uid, user?.userId, user?.username, user?.email]);
 
+  // Add user to Public Calendar
+  // Must add the calendar to the user's calendars array && users id to the calendar's subscribingUsers array
+  // If the calendar is NOT found, return an error
+  const addUserToPublicCalendar = useCallback(async (calendarId) => {
+    if (!authUser?.uid) {
+      throw new Error("User not authenticated");
+    }
+    
+    if (!calendarId || typeof calendarId !== 'string') {
+      throw new Error("Invalid calendar ID");
+    }
+
+    try {
+      console.log("Attempting to add user to public calendar:", calendarId);
+      
+      const calendarData = await getDocument('calendars', calendarId);
+      console.log("Fetched calendar data:", calendarData, calendarData?.type);
+      
+      if (!calendarData) {
+        throw new Error("Calendar not found");
+      }
+      
+      if (calendarData.type !== 'public') {
+        throw new Error("Calendar is not public");
+      }
+      if (calendarData.subscribingUsers.includes(authUser.uid)) {
+        throw new Error("User is already subscribed to this calendar");
+      }
+
+      // Add calendar to user's calendars array
+      const userData = await getDocument('users', authUser.uid);
+      if (!userData) {
+        throw new Error("User document not found");
+      }
+
+      const updatedUserCalendars = [...(userData.calendars || []), {
+        calendarId: calendarData.calendarId,
+        name: calendarData.name,
+        color: calendarData.color,
+        permissions: 'read',
+        isOwner: false
+      }];
+
+      // Update user document
+      await updateDocument('users', authUser.uid, {
+        calendars: updatedUserCalendars,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Add user to calendar's subscribingUsers array
+      const updatedSubscribingUsers = [...(calendarData.subscribingUsers || []), authUser.uid];
+
+      await updateDocument('calendars', calendarId, {
+        subscribingUsers: updatedSubscribingUsers,
+        updatedAt: new Date().toISOString()
+      });
+
+      console.log("User successfully added to public calendar:", calendarId);
+      
+      return {
+        success: true,
+        calendarId
+      };
+      
+    } catch (error) {
+      console.error("Error adding user to public calendar:", error);
+      throw error;
+    }
+  }, [authUser?.uid]);
+
   return {
     addCalendar,
     removeCalendar,
@@ -556,6 +628,7 @@ export const useCalendarActions = () => {
     deactivateCalendar,
     addEventToCalendar,
     deleteEventFromCalendar,
-    updateEventInCalendar
+    updateEventInCalendar,
+    addUserToPublicCalendar
   };
 };

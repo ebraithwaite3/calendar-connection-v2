@@ -5,6 +5,7 @@ import { CustomThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { DataProvider } from './src/contexts/DataContext';
 import LoginScreen from './src/screens/LoginScreen';
 import MainNavigator from './src/navigation/MainNavigator';
+import Toast from 'react-native-toast-message';
 
 // 1. Import GestureHandlerRootView
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -45,9 +46,9 @@ export default function App() {
     <CustomThemeProvider>
       <AuthProvider>
         <DataProvider>
-          {/* 2. Wrap your entire application content with GestureHandlerRootView */}
           <GestureHandlerRootView style={{ flex: 1 }}>
             <MainApp />
+            <Toast />
           </GestureHandlerRootView>
         </DataProvider>
       </AuthProvider>

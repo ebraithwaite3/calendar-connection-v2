@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { useData } from "../contexts/DataContext";
@@ -14,6 +16,9 @@ import { useCalendarActions } from "../hooks/useCalendarActions";
 import { Ionicons } from "@expo/vector-icons";
 import { DateTime } from "luxon";
 import EventCreateEditModal from "../components/modals/EventCreateEditModal";
+import { PanGestureHandler, State } from "react-native-gesture-handler";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const CalendarScreen = ({ navigation }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
@@ -22,33 +27,28 @@ const CalendarScreen = ({ navigation }) => {
   const [syncing, setSyncing] = useState(false);
   const [syncingCalendars, setSyncingCalendars] = useState(new Set());
   const [createEditModalVisible, setCreateEditModalVisible] = useState(false);
-  console.log("Created Edit Modal Visible:", createEditModalVisible);
-  
-  const today = DateTime.now().setZone("America/New_York"); // EDT for September 2025
+
+  const today = DateTime.now().setZone("America/New_York");
   const [currentMonth, setCurrentMonth] = useState(today.startOf("month"));
 
-  const externalCalendars = useMemo(() => {
-    return calendars.filter(cal => cal.type !== 'internal');
-  }, [calendars]);
-  console.log("External calendars:", externalCalendars);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  const externalCalendars = useMemo(
+    () => calendars.filter((cal) => cal.type !== "internal"),
+    [calendars]
+  );
 
   const editableCalendars = useMemo(() => {
-        // Return calendar objects from user.calendars that are internal with write permissions
-        if (!user?.calendars || user.calendars.length === 0) return [];
-      
-        return user.calendars.filter(
-          (cal) => cal.permissions === "write" && cal.calendarType === "internal"
-        );
-      }, [user?.calendars]);
-      console.log("Editable calendars:", editableCalendars);
+    if (!user?.calendars || user.calendars.length === 0) return [];
+    return user.calendars.filter(
+      (cal) => cal.permissions === "write" && cal.calendarType === "internal"
+    );
+  }, [user?.calendars]);
 
   const handleImportCalendar = () => {
     if (calendars.length < 2) {
-      // If its less than 2, that means they only have their internal user calendar
-      // So give them the option to import a calendar
       navigation.navigate("ImportCalendar");
     } else {
-      // Navigate to the CalendarEdit screen if there are already calendars
       navigation.navigate("CalendarEdit");
     }
   };
@@ -80,15 +80,12 @@ const CalendarScreen = ({ navigation }) => {
               const syncPromises = externalCalendars.map(async (calendar) => {
                 const calendarId = calendar.calendarId || calendar.id;
                 setSyncingCalendars((prev) => new Set([...prev, calendarId]));
-
                 try {
                   await syncCalendar(calendarId);
                   successCount++;
-                  console.log(`✅ Synced: ${calendar.name}`);
                 } catch (error) {
                   errorCount++;
                   errors.push(`${calendar.name}: ${error.message}`);
-                  console.error(`❌ Failed to sync ${calendar.name}:`, error);
                 } finally {
                   setSyncingCalendars((prev) => {
                     const newSet = new Set(prev);
@@ -119,7 +116,6 @@ const CalendarScreen = ({ navigation }) => {
                 );
               }
             } catch (error) {
-              console.error("Sync all error:", error);
               Alert.alert(
                 "Sync Error",
                 "An unexpected error occurred while syncing calendars."
@@ -134,98 +130,130 @@ const CalendarScreen = ({ navigation }) => {
     );
   };
 
-  // Helper function to check if an event has been hidden by user
-const isEventHidden = (eventId) => {
-  return user?.hiddenEvents?.some(hidden => hidden.eventId === eventId) || false;
-};
+  const isEventHidden = (eventId) => {
+    return (
+      user?.hiddenEvents?.some((hidden) => hidden.eventId === eventId) || false
+    );
+  };
 
-  // Get all events for a specific date
-const getEventsForDate = (date) => {
-  if (!calendars || calendars.length === 0) return [];
+  const getEventsForDate = (date) => {
+    if (!calendars || calendars.length === 0) return [];
 
-  const dateISO = date.toISODate();
-  const events = [];
+    const dateISO = date.toISODate();
+    const events = [];
 
-  calendars.forEach((calendar) => {
-    if (calendar.events) {
-      // Change from Object.values to Object.entries to get the eventKey
-      Object.entries(calendar.events).forEach(([eventKey, event]) => {
-        const eventDate = DateTime.fromISO(event.startTime).setZone(
-          "America/New_York"
-        );
-        if (eventDate.toISODate() === dateISO) {
-          // Add the hidden event check here
-          if (!isEventHidden(eventKey)) {
+    calendars.forEach((calendar) => {
+      if (calendar.events) {
+        Object.entries(calendar.events).forEach(([eventKey, event]) => {
+          const eventDate = DateTime.fromISO(event.startTime).setZone(
+            "America/New_York"
+          );
+          if (eventDate.toISODate() === dateISO && !isEventHidden(eventKey)) {
             events.push({
               ...event,
-              eventId: eventKey, // Add this line to include the eventId
+              eventId: eventKey,
               calendarColor: calendar.color,
               calendarName: calendar.name,
             });
           }
-        }
-      });
-    }
-  });
+        });
+      }
+    });
 
-  return events;
-};
+    return events;
+  };
 
-  // Generate calendar days for current month
-  const calendarDays = useMemo(() => {
-    const startOfMonth = currentMonth
-      .startOf("month")
-      .setZone("America/New_York");
-    const endOfMonth = currentMonth.endOf("month").setZone("America/New_York");
+  const generateCalendarDays = (month) => {
+    const startOfMonth = month.startOf("month").setZone("America/New_York");
+    const endOfMonth = month.endOf("month").setZone("America/New_York");
 
-    // Manual calculation for the first day of the calendar grid (the Sunday before the 1st)
-    // Luxon's weekday is 1 for Monday, 7 for Sunday.
-    // To get to Sunday, we need to subtract the correct number of days.
-    const daysToSubtract =
-      startOfMonth.weekday === 7 ? 0 : startOfMonth.weekday;
+    const daysToSubtract = startOfMonth.weekday === 7 ? 0 : startOfMonth.weekday;
     const startOfGrid = startOfMonth.minus({ days: daysToSubtract });
+
+    // Calculate the end of the calendar grid (always complete weeks)
+    const daysInMonth = endOfMonth.day;
+    const totalDaysNeeded = daysToSubtract + daysInMonth;
+    const weeksNeeded = Math.ceil(totalDaysNeeded / 7);
+    const totalCells = weeksNeeded * 7;
 
     const days = [];
     let current = startOfGrid;
 
-    while (current <= endOfMonth.endOf("week")) {
-      const events = getEventsForDate(current);
+    for (let i = 0; i < totalCells; i++) {
+      const isCurrentMonth = current.month === month.month;
+      const events = isCurrentMonth ? getEventsForDate(current) : [];
+      
       days.push({
         date: current,
-        isCurrentMonth: current.month === currentMonth.month,
-        isToday:
-          current.setZone("America/New_York").toISODate() === today.toISODate(),
-        events: events,
+        isCurrentMonth,
+        isToday: current.toISODate() === today.toISODate(),
+        events,
         eventCount: events.length,
       });
       current = current.plus({ days: 1 });
     }
 
     return days;
-  }, [currentMonth, calendars, today]);
+  };
+
+  const [calendarDays, setCalendarDays] = useState(() =>
+    generateCalendarDays(currentMonth)
+  );
+
+  const weeks = [];
+  for (let i = 0; i < calendarDays.length; i += 7) {
+    weeks.push(calendarDays.slice(i, i + 7));
+  }
 
   const handleDatePress = (day) => {
     navigation.navigate("DayScreen", { date: day.date.toISODate() });
   };
 
-  const handlePreviousMonth = () => {
-    setCurrentMonth((prev) => prev.minus({ months: 1 }));
+  const handleMonthChange = (direction) => {
+    const newMonth =
+      direction === "next"
+        ? currentMonth.plus({ months: 1 })
+        : currentMonth.minus({ months: 1 });
+
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    setCurrentMonth(newMonth);
+    setCalendarDays(generateCalendarDays(newMonth));
   };
 
-  const handleNextMonth = () => {
-    setCurrentMonth((prev) => prev.plus({ months: 1 }));
+  const onSwipe = (event) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationX } = event.nativeEvent;
+      if (translationX < -50) {
+        handleMonthChange("next");
+      }
+      if (translationX > 50) {
+        handleMonthChange("prev");
+      }
+    }
   };
 
   const handleToday = () => {
-    setCurrentMonth(today.startOf("month"));
+    const todayMonthStart = today.startOf("month");
+    setCurrentMonth(todayMonthStart);
+    setCalendarDays(generateCalendarDays(todayMonthStart));
   };
 
   const renderEventIndicators = (events) => {
-    if (events.length === 0) return null;
-
+    if (!events || events.length === 0) return null;
     const maxIndicators = 3;
     const visibleEvents = events.slice(0, maxIndicators);
-
     return (
       <View style={styles.eventIndicators}>
         {visibleEvents.map((event, index) => (
@@ -249,12 +277,6 @@ const getEventsForDate = (date) => {
       </View>
     );
   };
-
-  // Group days into weeks
-  const weeks = [];
-  for (let i = 0; i < calendarDays.length; i += 7) {
-    weeks.push(calendarDays.slice(i, i + 7));
-  }
 
   const styles = StyleSheet.create({
     container: {
@@ -313,39 +335,22 @@ const getEventsForDate = (date) => {
     content: {
       flex: 1,
       paddingHorizontal: getSpacing.md,
-      paddingTop: getSpacing.lg,
-    },
-    monthNavigation: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: getSpacing.lg,
-    },
-    navButton: {
-      backgroundColor: theme.button.secondary,
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      justifyContent: "center",
-      alignItems: "center",
+      paddingTop: getSpacing.sm,
     },
     monthTitle: {
       fontSize: getTypography.h1.fontSize,
       fontWeight: getTypography.h1.fontWeight,
       color: theme.text.primary,
     },
-    todayButtonContainer: {
-      height: 40, // keeps space even if button hidden
-      justifyContent: "center",
-      alignItems: "flex-center",
-      // marginBottom: getSpacing.lg,
-    },
-    todayButton: {
+    todayButtonFloating: {
+      position: "absolute",
+      bottom: 20,
+      right: 20,
       backgroundColor: theme.primary,
       paddingHorizontal: getSpacing.md,
       paddingVertical: getSpacing.sm,
       borderRadius: getBorderRadius.md,
-      alignSelf: "center", // only as wide as text
+      zIndex: 10,
     },
     todayButtonText: {
       color: theme.text.inverse,
@@ -359,7 +364,7 @@ const getEventsForDate = (date) => {
     dayHeader: {
       flex: 1,
       alignItems: "center",
-      paddingVertical: getSpacing.sm,
+      paddingVertical: getSpacing.xs,
     },
     dayHeaderText: {
       fontSize: getTypography.bodySmall.fontSize,
@@ -384,10 +389,11 @@ const getEventsForDate = (date) => {
       marginVertical: 1,
     },
     todayCell: {
-      backgroundColor: `${theme.primary}60`,
+      borderWidth: 3,
+      borderColor: "#FF0000",
     },
     otherMonthCell: {
-      opacity: 0.3,
+      opacity: 0,
     },
     dayText: {
       fontSize: getTypography.body.fontSize,
@@ -396,7 +402,7 @@ const getEventsForDate = (date) => {
       marginBottom: getSpacing.xs,
     },
     todayText: {
-      color: theme.primary,
+      color: "#FF0000",
       fontWeight: "700",
     },
     otherMonthText: {
@@ -431,14 +437,13 @@ const getEventsForDate = (date) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header - Just sync and add buttons */}
+      {/* Header - Only title and sync/add buttons */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
           {calendars?.length > 1 ? "Calendars" : "Calendar"}
         </Text>
 
         <View style={styles.headerActions}>
-          {/* Sync All Button - only show if we have calendars */}
           {externalCalendars.length > 0 && (
             <TouchableOpacity
               style={[
@@ -461,7 +466,6 @@ const getEventsForDate = (date) => {
             </TouchableOpacity>
           )}
 
-          {/* Add Calendar Button */}
           <TouchableOpacity
             style={[
               styles.fab,
@@ -490,7 +494,7 @@ const getEventsForDate = (date) => {
               <Ionicons name="calendar" size={24} color={theme.text.inverse} />
             )}
           </TouchableOpacity>
-          {/* Add a plus button for adding an event, for now just console log */}
+
           <TouchableOpacity
             style={styles.fab}
             onPress={() => setCreateEditModalVisible(true)}
@@ -500,84 +504,78 @@ const getEventsForDate = (date) => {
         </View>
       </View>
 
-      {/* Calendar Content */}
-      <View style={styles.content}>
-        {/* Month Navigation */}
-        <View style={styles.monthNavigation}>
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={handlePreviousMonth}
+      {/* FIX: PanGestureHandler now wraps the entire content View */}
+      <PanGestureHandler onHandlerStateChange={onSwipe}>
+        <View style={styles.content}>
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              alignItems: "center",
+              marginBottom: getSpacing.sm,
+            }}
           >
-            <Ionicons
-              name="chevron-back"
-              size={20}
-              color={theme.button.secondaryText}
-            />
-          </TouchableOpacity>
+            <Text style={styles.monthTitle}>
+              {currentMonth.toFormat("MMMM yyyy")}
+            </Text>
+          </Animated.View>
 
-          <Text style={styles.monthTitle}>
-            {currentMonth.toFormat("MMMM yyyy")}
-          </Text>
-
-          <TouchableOpacity style={styles.navButton} onPress={handleNextMonth}>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={theme.button.secondaryText}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Today Button Container (always takes space) */}
-        <View style={styles.todayButtonContainer}>
+          {/* Today Floating Button */}
           {currentMonth.month !== today.month ||
           currentMonth.year !== today.year ? (
-            <TouchableOpacity style={styles.todayButton} onPress={handleToday}>
-              <Text style={styles.todayButtonText}>Jump to Today</Text>
+            <TouchableOpacity
+              style={styles.todayButtonFloating}
+              onPress={handleToday}
+            >
+              <Text style={styles.todayButtonText}>Today</Text>
             </TouchableOpacity>
           ) : null}
-        </View>
 
-        {/* Days of Week Header */}
-        <View style={styles.weekHeader}>
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <View key={day} style={styles.dayHeader}>
-              <Text style={styles.dayHeaderText}>{day}</Text>
-            </View>
-          ))}
-        </View>
+          {/* Week Header */}
+          <View style={styles.weekHeader}>
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <View key={day} style={styles.dayHeader}>
+                <Text style={styles.dayHeaderText}>{day}</Text>
+              </View>
+            ))}
+          </View>
 
-        {/* Calendar Grid */}
-        <View style={styles.calendarGrid}>
-          {weeks.map((week, weekIndex) => (
-            <View key={weekIndex} style={styles.weekRow}>
-              {week.map((day, dayIndex) => (
-                <TouchableOpacity
-                  key={dayIndex}
-                  style={[
-                    styles.dayCell,
-                    day.isToday && styles.todayCell,
-                    !day.isCurrentMonth && styles.otherMonthCell,
-                  ]}
-                  onPress={() => handleDatePress(day)}
-                  activeOpacity={0.7}
-                >
-                  <Text
+          {/* Calendar Grid */}
+          <View style={styles.calendarGrid}>
+            {weeks.map((week, weekIndex) => (
+              <View key={weekIndex} style={styles.weekRow}>
+                {week.map((day, dayIndex) => (
+                  <TouchableOpacity
+                    key={dayIndex}
                     style={[
-                      styles.dayText,
-                      day.isToday && styles.todayText,
-                      !day.isCurrentMonth && styles.otherMonthText,
+                      styles.dayCell,
+                      day.isToday && styles.todayCell,
+                      !day.isCurrentMonth && styles.otherMonthCell,
                     ]}
+                    onPress={() => handleDatePress(day)}
+                    activeOpacity={0.7}
+                    disabled={!day.isCurrentMonth}
                   >
-                    {day.date.day}
-                  </Text>
-                  {renderEventIndicators(day.events)}
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))}
+                    {day.isCurrentMonth && (
+                      <>
+                        <Text
+                          style={[
+                            styles.dayText,
+                            day.isToday && styles.todayText,
+                          ]}
+                        >
+                          {day.date.day}
+                        </Text>
+                        {renderEventIndicators(day.events)}
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
+      </PanGestureHandler>
+
       <EventCreateEditModal
         isVisible={createEditModalVisible}
         onClose={() => setCreateEditModalVisible(false)}

@@ -11,13 +11,16 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 
 const SlideOutMenu = ({ 
-  isVisible, 
+  isVisible,
+  user,
+  isUserAdmin,
   calendarsCount,
   onClose, 
   onLogout, 
   isDarkMode, 
   toggleTheme
 }) => {
+  console.log("USER IN SLIDE OUT MENU:", user);
   const { theme, getSpacing, getTypography } = useTheme();
   const navigation = useNavigation();
 
@@ -124,6 +127,22 @@ const SlideOutMenu = ({
     navigation.navigate('Calendar', { screen: 'CalendarEdit' });
   };
 
+  const handlePublicCalendarsNavigation = () => {
+    console.log("Navigating to Public Calendars...");
+    onClose();
+    navigation.navigate('Calendar', { 
+      screen: 'PublicCalendars' 
+    });
+  }
+
+  // Handle Groceries Navigation
+  const handleGroceriesNavigation = () => {
+    onClose();
+    navigation.navigate('Grocery',
+      { screen: 'GroceryHome' }
+    );
+  };
+
   return (
     <Modal
       animationType="slide"
@@ -155,6 +174,22 @@ const SlideOutMenu = ({
                 <Text style={styles.menuItemIcon}>📅</Text>
                 <Text style={styles.menuItemText}>My Calendars ({calendarsCount})</Text>
               </TouchableOpacity>
+
+              {/* If User is Admin, show Public Calendars Text */}
+              {isUserAdmin && (
+                <TouchableOpacity style={styles.menuItem} onPress={handlePublicCalendarsNavigation}>
+                  <Text style={styles.menuItemIcon}>🌐</Text>
+                  <Text style={styles.menuItemText}>Public Calendars</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Groceries, if user has groceryId */}
+              {user?.groceryId && (
+                <TouchableOpacity style={styles.menuItem} onPress={handleGroceriesNavigation}>
+                  <Text style={styles.menuItemIcon}>🛒</Text>
+                  <Text style={styles.menuItemText}>Groceries</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Logout */}
               <TouchableOpacity 

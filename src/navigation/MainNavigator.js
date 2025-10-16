@@ -24,6 +24,12 @@ import MessagesScreen from '../screens/MessagesScreen';
 import CreateTaskScreen from '../screens/CreateTaskScreen';
 import DayScreen from '../screens/DayScreen';
 import CalendarEditScreen from '../screens/CalendarEditScreen';
+import AddPublicCalendarsScreen from '../screens/AddPublicCalendarsScreen';
+import GroceryHomeScreen from '../screens/GroceryHomeScreen'; // <-- ADDED
+import GroceryInventoryScreen from '../screens/GroceryInventoryScreen';
+import GroceryBankScreen from '../screens/GroceryBankScreen';
+import GroceryShoppingListScreen from '../screens/GroceryShoppingListScreen';
+import GroceryMealsScreen from '../screens/GroceryMealsScreen';
 
 // Sub-screens
 import EventDetailsScreen from '../screens/EventDetailsScreen';
@@ -38,6 +44,7 @@ const CalendarStack = createStackNavigator();
 const GroupsStack = createStackNavigator();
 const MessagesStack = createStackNavigator();
 const PreferencesStack = createStackNavigator();
+const GroceryStack = createStackNavigator(); // <-- ADDED
 
 // Stack navigators for each tab
 function TodayStackScreen() {
@@ -65,6 +72,7 @@ function CalendarStackScreen() {
       <CalendarStack.Screen name="CreateTask" component={CreateTaskScreen} />
       <CalendarStack.Screen name="DayScreen" component={DayScreen} />
       <CalendarStack.Screen name="CalendarEdit" component={CalendarEditScreen} />
+      <CalendarStack.Screen name="PublicCalendars" component={AddPublicCalendarsScreen} />
     </CalendarStack.Navigator>
   );
 }
@@ -93,6 +101,20 @@ function PreferencesStackScreen() {
     <PreferencesStack.Navigator screenOptions={{ headerShown: false }}>
       <PreferencesStack.Screen name="PreferencesHome" component={PreferencesScreen} />
     </PreferencesStack.Navigator>
+  );
+}
+
+// <-- ADDED: Grocery Stack
+function GroceryStackScreen() {
+  return (
+    <GroceryStack.Navigator screenOptions={{ headerShown: false }}>
+      <GroceryStack.Screen name="GroceryHome" component={GroceryHomeScreen} />
+      <GroceryStack.Screen name="GroceryInventory" component={GroceryInventoryScreen} />
+      <GroceryStack.Screen name="GroceryBank" component={GroceryBankScreen} />
+      <GroceryStack.Screen name="GroceryMeals" component={GroceryMealsScreen} />
+      <GroceryStack.Screen name="GroceryShoppingList" component={GroceryShoppingListScreen} />
+      {/* Add more grocery screens here as needed */}
+    </GroceryStack.Navigator>
   );
 }
 
@@ -253,6 +275,15 @@ function TabNavigator({ initialRoute, theme, onLogout, unreadMessagesCount, unac
             },
           })}
         />
+        {/* <-- ADDED: Hidden Grocery Stack */}
+        <Tab.Screen 
+          name="Grocery" 
+          component={GroceryStackScreen}
+          options={{
+            tabBarButton: () => null,
+            tabBarItemStyle: { width: 0, height: 0, display: 'none' },
+          }}
+        />
       </Tab.Navigator>
     </>
   );
@@ -349,6 +380,11 @@ const MainNavigator = ({ onLogout }) => {
           screens: {
             PreferencesHome: 'preferences',
             Messages: 'preferences/messages',
+          },
+        },
+        Grocery: { // <-- ADDED
+          screens: {
+            GroceryHome: 'grocery',
           },
         },
         NotFound: '*',

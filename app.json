@@ -4,7 +4,7 @@
     "slug": "CalendarConnectionV2",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/CalendarConnectionv2AppIcon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "calendarconnectionv2",

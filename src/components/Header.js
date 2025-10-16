@@ -17,7 +17,7 @@ const Header = ({
   onBackPress = null
 }) => {
   const { theme, isDarkMode, toggleTheme, getSpacing, getTypography } = useTheme();
-  const { user, calendars } = useData();
+  const { user, calendars, isUserAdmin } = useData();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   console.log("CALENDARS IN HEADER:", calendars, calendars.length);
 
@@ -168,6 +168,8 @@ const Header = ({
       {/* Slide Out Menu */}
       <SlideOutMenu
         isVisible={isMenuVisible}
+        user={user}
+        isUserAdmin={isUserAdmin}
         calendarsCount={calendars?.length}
         onClose={() => setIsMenuVisible(false)}
         onLogout={onLogout}
