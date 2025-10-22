@@ -9,21 +9,25 @@ import { useGroceryActions } from "../../hooks";
 const CategorySectionForLists = ({
   category,
   items,
+  groups,
   foodBank,
+  meals,
   inventory,
   shoppingList,
   onQuantityChange,
 }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
-    const { addToShoppingList, updateShoppingListItem } = useGroceryActions();
+    const { addToShoppingList, updateShoppingListItem, updateItemWithIngredients } = useGroceryActions();
   const [expanded, setExpanded] = useState(false);
   const [quickAddModalVisible, setQuickAddModalVisible] = useState(false);
   const [selectedItemForQuickAdd, setSelectedItemForQuickAdd] = useState(null);
   const [restockAmountForQuickAdd, setRestockAmountForQuickAdd] = useState(1);
+  const [selectedFoodBankItemForQuickAdd, setSelectedFoodBankItemForQuickAdd] = useState(null);
 
-  const handleQuickAddPress = (item, restockAmount) => {
+  const handleQuickAddPress = (item, restockAmount, foodBankItem) => {
     setSelectedItemForQuickAdd(item);
     setRestockAmountForQuickAdd(restockAmount || 1);
+    setSelectedFoodBankItemForQuickAdd(foodBankItem || null);
     setQuickAddModalVisible(true);
   };
 
@@ -38,36 +42,49 @@ const CategorySectionForLists = ({
   };
 
   // Render item card
-  const renderItemCard = (item) => {
-    // Find the shopping list item by matching the id
-    const shoppingListItem = Array.isArray(shoppingList) 
-      ? shoppingList.find((listItem) => listItem.id === item.id)
-      : null;
-    const shoppingListQty = shoppingListItem?.quantity || 0;
-    
-    // Find the item in the food bank to get its restock amount
-    const foodBankItem = Object.values(foodBank || {})
-      .flat()
-      .find((bankItem) => bankItem.id === item.id);
-    const restockAmount = foodBankItem?.restockAmount || 1;
+const renderItemCard = (item) => {
+  // Find the shopping list item by matching the id
+  const shoppingListItem = Array.isArray(shoppingList) 
+    ? shoppingList.find((listItem) => listItem.id === item.id)
+    : null;
+  const shoppingListQty = shoppingListItem?.quantity || 0;
   
-    // Get inventory quantity for this item
-    const inventoryQty = inventory?.[item.id]?.quantity || 0;
-  
-    return (
-      <FoodItemForList
-        key={item.id}
-        item={item}
-        onQuickAddPress={handleQuickAddPress}
-        currentQuantity={item.quantity}
-        shoppingListQuantity={shoppingListQty}
-        restockAmount={restockAmount}
-        inventoryQuantity={inventoryQty}
-        onUpdateQuantity={onQuantityChange}
-        isInventory={true}
-      />
-    );
-  };
+  // Find the item in the food bank to get its restock amount
+  const foodBankItem = Object.values(foodBank || {})
+    .flat()
+    .find((bankItem) => bankItem.id === item.id);
+  console.log('Food Bank Item for', item.name, ':', foodBankItem);
+  const restockAmount = foodBankItem?.restockAmount || 1;
+
+  // Get inventory quantity for this item
+  const inventoryQty = inventory?.[item.id]?.quantity || 0;
+
+  // Check if item has ingredients
+  const hasIngredients = foodBankItem?.ingredients && 
+                        Array.isArray(foodBankItem.ingredients) && 
+                        foodBankItem.ingredients.length > 0;
+
+  // If item has ingredients, check if it's in meals too
+  const mealItem = hasIngredients
+    ? meals.find((meal) => meal.id === item.id)
+    : null;
+
+  return (
+    <FoodItemForList
+      key={item.id}
+      item={item}
+      foodBankItem={foodBankItem}
+      mealItem={mealItem}
+      onQuickAddPress={handleQuickAddPress}
+      currentQuantity={item.quantity}
+      shoppingListQuantity={shoppingListQty}
+      restockAmount={restockAmount}
+      inventoryQuantity={inventoryQty}
+      onUpdateQuantity={onQuantityChange}
+      isInventory={true}
+    />
+  );
+};
 
   const styles = StyleSheet.create({
     container: {
@@ -148,13 +165,20 @@ const CategorySectionForLists = ({
       <QuickAddModal
         visible={quickAddModalVisible}
         restockAmount={restockAmountForQuickAdd}
+        foodBankItem={selectedFoodBankItemForQuickAdd}
         item={selectedItemForQuickAdd}
         shoppingList={shoppingList}
+        inventory={inventory}
         onClose={() => setQuickAddModalVisible(false)}
-        onAddToList={(itemData, isUpdate) => {
-          if (isUpdate) {
+        onAddToList={(itemData, isUpdate, includeIngredients) => {
+          if (includeIngredients) {
+            console.log('Including ingredients in shopping list item.');
+            updateItemWithIngredients(itemData, isUpdate, groups, isUpdate);
+          } else if (isUpdate) {
+            console.log('Updating existing shopping list item.');
             updateShoppingListItem(itemData.id, itemData);
           } else {
+            console.log('Adding new item to shopping list.');
             addToShoppingList(itemData);
           }
         }}

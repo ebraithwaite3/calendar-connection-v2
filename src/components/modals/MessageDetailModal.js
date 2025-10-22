@@ -82,6 +82,13 @@ const MessageDetailModal = ({ isVisible, onClose, message }) => {
             params: params 
           });
           break;
+          case 'Grocery':
+        // Navigate to Grocery stack with nested navigation
+        navigation.navigate('Grocery', {
+          screen: params.screen || 'GroceryHome',
+          params: params.params
+        });
+        break;
         
         default:
           console.warn('Unknown navigation screen:', screen);

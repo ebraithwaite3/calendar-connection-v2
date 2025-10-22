@@ -13,16 +13,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import QuantityTracker from '../QuantityTracker';
+import * as Crypto from 'expo-crypto';
 
 const AddIngredientModal = ({ visible, onClose, onAdd, allCategories = [], foodBank = {} }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
   const [ingredientName, setIngredientName] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [selectedItemId, setSelectedItemId] = useState(null);
   const [unit, setUnit] = useState('count');
   const [category, setCategory] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
   const [isNewIngredient, setIsNewIngredient] = useState(false);
+
+  const uuidv4 = () => Crypto.randomUUID();
 
   const unitOptions = [
     { value: 'count', label: 'Count' },
@@ -56,6 +60,7 @@ const AddIngredientModal = ({ visible, onClose, onAdd, allCategories = [], foodB
           items.push({
             name: item.name,
             category: cat,
+            id: item.id,
           });
         });
       }
@@ -73,6 +78,7 @@ const AddIngredientModal = ({ visible, onClose, onAdd, allCategories = [], foodB
   const handleSelectSuggestion = (item) => {
     setIngredientName(item.name);
     setCategory(item.category);
+    setSelectedItemId(item.id);
     setShowSuggestions(false);
     setIsNewIngredient(false);
   };
@@ -81,6 +87,7 @@ const AddIngredientModal = ({ visible, onClose, onAdd, allCategories = [], foodB
     setShowSuggestions(false);
     setIsNewIngredient(true);
     setCategory('');
+    setSelectedItemId(null);
   };
 
   const handleAdd = () => {
@@ -91,6 +98,7 @@ const AddIngredientModal = ({ visible, onClose, onAdd, allCategories = [], foodB
       }
       
       const ingredient = {
+        id: selectedItemId || uuidv4(),
         name: ingredientName.trim(),
         category: category || allItems.find(item => item.name === ingredientName)?.category,
         quantity: quantity,
@@ -109,6 +117,7 @@ const AddIngredientModal = ({ visible, onClose, onAdd, allCategories = [], foodB
     setShowSuggestions(false);
     setShowUnitPicker(false);
     setIsNewIngredient(false);
+    setSelectedItemId(null);
     onClose();
   };
 

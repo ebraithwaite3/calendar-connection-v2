@@ -10,6 +10,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 const FoodItemForList = ({ 
   item, 
+  foodBankItem,
+  mealItem,
   currentQuantity,
   shoppingListQuantity,
   restockAmount,
@@ -28,25 +30,32 @@ const FoodItemForList = ({
 
   const handleQuickAdd = () => {
     if (onQuickAddPress) {
-      onQuickAddPress(item, restockAmount);
+      onQuickAddPress(item, restockAmount, foodBankItem);
     }
   };
 
   // Determine what to show under the item name
-  const getSecondaryInfo = () => {
-    if (isInventory) {
-      // Show shopping list quantity if any
-      if (shoppingListQuantity && shoppingListQuantity > 0) {
-        return `Shopping List: ${shoppingListQuantity}`;
-      }
-    } else {
-      // Show inventory quantity if any
-      if (inventoryQuantity && inventoryQuantity > 0) {
-        return `Inventory: ${inventoryQuantity}`;
-      }
+const getSecondaryInfo = () => {
+  // First priority: Check if it's a meal item
+  if (mealItem) {
+    return 'Ready to Make';
+  }
+  
+  // Second priority: Check shopping list/inventory based on context
+  if (isInventory) {
+    // Show shopping list quantity if any
+    if (shoppingListQuantity && shoppingListQuantity > 0) {
+      return `Shopping List: ${shoppingListQuantity}`;
     }
-    return null;
-  };
+  } else {
+    // Show inventory quantity if any
+    if (inventoryQuantity && inventoryQuantity > 0) {
+      return `Inventory: ${inventoryQuantity}`;
+    }
+  }
+  
+  return null;
+};
 
   const secondaryInfo = getSecondaryInfo();
   const greenColor = '#10B981';

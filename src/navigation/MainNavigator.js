@@ -382,9 +382,13 @@ const MainNavigator = ({ onLogout }) => {
             Messages: 'preferences/messages',
           },
         },
-        Grocery: { // <-- ADDED
+        Grocery: {
           screens: {
             GroceryHome: 'grocery',
+            GroceryShoppingList: 'grocery/shopping-list',
+            GroceryInventory: 'grocery/inventory',
+            GroceryBank: 'grocery/bank',
+            GroceryMeals: 'grocery/meals',
           },
         },
         NotFound: '*',

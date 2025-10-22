@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { useAuth } from "../contexts/AuthContext";
-import Icon from "react-native-vector-icons/Ionicons";
+import { Ionicons } from "@expo/vector-icons";
 
 const LoginScreen = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -198,7 +198,7 @@ const LoginScreen = () => {
                   style={styles.iconButton}
                   onPress={() => setPasswordVisible(!passwordVisible)}
                 >
-                  <Icon
+                  <Ionicons
                     name={passwordVisible ? "eye-off-outline" : "eye-outline"}
                     size={24}
                     color="#6b7280"
@@ -224,7 +224,7 @@ const LoginScreen = () => {
                     style={styles.iconButton}
                     onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
                   >
-                    <Icon
+                    <Ionicons
                       name={confirmPasswordVisible ? "eye-off-outline" : "eye-outline"}
                       size={24}
                       color="#6b7280"

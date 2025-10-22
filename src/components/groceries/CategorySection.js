@@ -36,6 +36,43 @@ const CategorySection = ({
       .join(' ');
   };
 
+  // Helper Function: Add new ingredients to food bank if they don't exist
+const addNewIngredientsToFoodBank = (ingredients, currentFoodBank) => {
+  if (!ingredients || ingredients.length === 0) return currentFoodBank;
+
+  let updatedBank = { ...currentFoodBank };
+  
+  ingredients.forEach(ingredient => {
+    // Check if this ingredient ID exists anywhere in the food bank
+    const existsInBank = Object.values(currentFoodBank).some(categoryItems => 
+      Array.isArray(categoryItems) && categoryItems.some(item => item.id === ingredient.id)
+    );
+
+    // If it doesn't exist, add it to the food bank
+    if (!existsInBank && ingredient.category) {
+      const ingredientCategory = ingredient.category;
+      
+      // Create the ingredient item for the food bank (strip out quantity/unit which are recipe-specific)
+      const foodBankItem = {
+        id: ingredient.id,
+        name: ingredient.name,
+        unit: ingredient.unit || 'count',
+        autoAdd: false,
+        autoAddAt: 0,
+        restockAmount: 1,
+      };
+
+      // Add to the appropriate category
+      if (!updatedBank[ingredientCategory]) {
+        updatedBank[ingredientCategory] = [];
+      }
+      updatedBank[ingredientCategory] = [...updatedBank[ingredientCategory], foodBankItem];
+    }
+  });
+
+  return updatedBank;
+};
+
   // Sort items: favorites first, then alphabetically
   const sortedItems = [...items].sort((a, b) => {
     if (a.favorite && !b.favorite) return -1;
@@ -44,19 +81,31 @@ const CategorySection = ({
   });
 
   const handleAddItem = (itemData) => {
-    const newBank = {
-      ...foodBank,
-      [category]: [...items, itemData]
+    // First, add any new ingredients to the food bank
+    let updatedBank = addNewIngredientsToFoodBank(itemData.ingredients, foodBank);
+    
+    // Then add the item to this category
+    updatedBank = {
+      ...updatedBank,
+      [category]: [...(updatedBank[category] || []), itemData]
     };
-    onUpdateFoodBank(newBank);
+    
+    onUpdateFoodBank(updatedBank);
   };
-
+  
   const handleUpdateItem = (itemId, updatedItem) => {
-    const newBank = {
-      ...foodBank,
-      [category]: items.map(item => item.id === itemId ? updatedItem : item)
+    // First, add any new ingredients to the food bank
+    let updatedBank = addNewIngredientsToFoodBank(updatedItem.ingredients, foodBank);
+    
+    // Then update the item in this category
+    updatedBank = {
+      ...updatedBank,
+      [category]: (updatedBank[category] || []).map(item => 
+        item.id === itemId ? updatedItem : item
+      )
     };
-    onUpdateFoodBank(newBank);
+    
+    onUpdateFoodBank(updatedBank);
   };
 
   const handleDeleteItem = (itemId) => {

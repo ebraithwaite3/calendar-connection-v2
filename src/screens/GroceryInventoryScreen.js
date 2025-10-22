@@ -19,20 +19,24 @@ import QuickAddModal from "../components/groceries/QuickAddModal";
 
 const GroceryInventoryScreen = ({ navigation }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
-  const { groceries } = useData();
+  const { groceries, groups } = useData();
   const {
     updateInventoryItem,
     removeInventoryItem,
     addToShoppingList,
     updateShoppingListItem,
+    updateItemWithIngredients,
   } = useGroceryActions();
   const [quickAddModalVisible, setQuickAddModalVisible] = useState(false);
   const [selectedItemForQuickAdd, setSelectedItemForQuickAdd] = useState(null);
   const [restockAmountForQuickAdd, setRestockAmountForQuickAdd] = useState(1);
+  const [selectedFoodBankItemForQuickAdd, setSelectedFoodBankItemForQuickAdd] =
+    useState(null);
 
-  const handleQuickAddPress = (item, restockAmount) => {
+  const handleQuickAddPress = (item, restockAmount, foodBankItem) => {
     setSelectedItemForQuickAdd(item);
     setRestockAmountForQuickAdd(restockAmount || 1);
+    setSelectedFoodBankItemForQuickAdd(foodBankItem || null);
     setQuickAddModalVisible(true);
   };
 
@@ -44,6 +48,7 @@ const GroceryInventoryScreen = ({ navigation }) => {
     () => groceries?.shoppingList || [],
     [groceries?.shoppingList]
   );
+  const meals = useMemo(() => groceries?.meals || [], [groceries?.meals]);
 
   const [activeTab, setActiveTab] = useState("current");
   const [viewMode, setViewMode] = useState("categorized");
@@ -57,10 +62,21 @@ const GroceryInventoryScreen = ({ navigation }) => {
     );
   };
 
-  // Auto-add to shopping list helper
-  const autoAddToShoppingList = async (itemId, item, restockAmount) => {
+  // Auto-add to shopping list helper - NOW HANDLES INGREDIENTS
+  // Auto-add to shopping list helper - NOW HANDLES INGREDIENTS
+  const autoAddToShoppingList = async (
+    itemId,
+    item,
+    restockAmount,
+    itemFromFoodBank
+  ) => {
     const isOnList = isItemOnShoppingList(itemId);
+    const hasIngredients =
+      itemFromFoodBank?.ingredients &&
+      Array.isArray(itemFromFoodBank.ingredients) &&
+      itemFromFoodBank.ingredients.length > 0;
 
+    console.log("Is on List:", isOnList, "Has Ingredients:", hasIngredients);
     if (!isOnList) {
       // Item not on list - add it
       const newShoppingListItem = {
@@ -72,15 +88,63 @@ const GroceryInventoryScreen = ({ navigation }) => {
         quantity: restockAmount,
         updatedAt: new Date().toISOString(),
       };
-      await addToShoppingList(newShoppingListItem);
 
-      Toast.show({
-        type: "success",
-        text1: "Added to Shopping List",
-        text2: `${item.name} (${restockAmount})`,
-        position: "bottom",
-        visibilityTime: 2000,
-      });
+      // If it has ingredients defined, process them
+      if (hasIngredients) {
+        const ingredientsToAdd = [];
+
+        itemFromFoodBank.ingredients.forEach((ingredient) => {
+          const totalNeeded = ingredient.quantity * restockAmount;
+          const inventoryQty =
+            groceries?.inventory?.[ingredient.id]?.quantity || 0;
+          const shoppingListIngredient = shoppingList?.find(
+            (item) => item.id === ingredient.id
+          );
+
+          if (inventoryQty < totalNeeded) {
+            const deficit = totalNeeded - inventoryQty;
+            ingredientsToAdd.push({
+              ...ingredient,
+              quantity: deficit,
+              updateItem: !!shoppingListIngredient,
+            });
+          }
+        });
+
+        // ALWAYS set ingredients if the item has them defined (even if empty)
+        newShoppingListItem.ingredients = ingredientsToAdd;
+
+        // Call updateItemWithIngredients for messaging, even with empty ingredients
+        await updateItemWithIngredients(newShoppingListItem, false, groups);
+
+        if (ingredientsToAdd.length > 0) {
+          Toast.show({
+            type: "success",
+            text1: "Added to Shopping List with Ingredients",
+            text2: `${item.name} (${restockAmount}) + ${ingredientsToAdd.length} ingredients`,
+            position: "bottom",
+            visibilityTime: 2500,
+          });
+        } else {
+          Toast.show({
+            type: "success",
+            text1: "Added to Shopping List",
+            text2: `${item.name} (${restockAmount}) - All ingredients in stock!`,
+            position: "bottom",
+            visibilityTime: 2500,
+          });
+        }
+      } else {
+        await addToShoppingList(newShoppingListItem);
+
+        Toast.show({
+          type: "success",
+          text1: "Added to Shopping List",
+          text2: `${item.name} (${restockAmount})`,
+          position: "bottom",
+          visibilityTime: 2000,
+        });
+      }
     } else {
       // Item already on list - check if we need to update quantity
       const existingItem = shoppingList.find(
@@ -89,23 +153,69 @@ const GroceryInventoryScreen = ({ navigation }) => {
       const currentQuantity = existingItem.quantity || 0;
 
       if (currentQuantity < restockAmount) {
-        // Update to restock amount since it's not met yet
         const updatedItem = {
           ...existingItem,
           quantity: restockAmount,
           updatedAt: new Date().toISOString(),
         };
-        await updateShoppingListItem(itemId, updatedItem);
 
-        Toast.show({
-          type: "info",
-          text1: "Updated Shopping List",
-          text2: `${item.name}: ${currentQuantity} → ${restockAmount}`,
-          position: "bottom",
-          visibilityTime: 2000,
-        });
+        // If it has ingredients, process them for the UPDATE case
+        if (hasIngredients) {
+          const ingredientsToAdd = [];
+
+          itemFromFoodBank.ingredients.forEach((ingredient) => {
+            const totalNeeded = ingredient.quantity * restockAmount;
+            const inventoryQty =
+              groceries?.inventory?.[ingredient.id]?.quantity || 0;
+            const shoppingListIngredient = shoppingList?.find(
+              (item) => item.id === ingredient.id
+            );
+
+            if (inventoryQty < totalNeeded) {
+              const deficit = totalNeeded - inventoryQty;
+              ingredientsToAdd.push({
+                ...ingredient,
+                quantity: deficit,
+                updateItem: !!shoppingListIngredient,
+              });
+            }
+          });
+
+          // ALWAYS set ingredients if the item has them defined (even if empty)
+          updatedItem.ingredients = ingredientsToAdd;
+
+          // Call updateItemWithIngredients for messaging, even with empty ingredients
+          await updateItemWithIngredients(updatedItem, true, groups);
+
+          if (ingredientsToAdd.length > 0) {
+            Toast.show({
+              type: "info",
+              text1: "Updated Shopping List with Ingredients",
+              text2: `${item.name}: ${currentQuantity} → ${restockAmount} + ${ingredientsToAdd.length} ingredients`,
+              position: "bottom",
+              visibilityTime: 2500,
+            });
+          } else {
+            Toast.show({
+              type: "info",
+              text1: "Updated Shopping List",
+              text2: `${item.name}: ${currentQuantity} → ${restockAmount} - All ingredients in stock!`,
+              position: "bottom",
+              visibilityTime: 2500,
+            });
+          }
+        } else {
+          await updateShoppingListItem(itemId, updatedItem);
+
+          Toast.show({
+            type: "info",
+            text1: "Updated Shopping List",
+            text2: `${item.name}: ${currentQuantity} → ${restockAmount}`,
+            position: "bottom",
+            visibilityTime: 2000,
+          });
+        }
       } else {
-        // Already at or above restock amount - no action needed
         Toast.show({
           type: "info",
           text1: "Already on Shopping List",
@@ -179,7 +289,7 @@ const GroceryInventoryScreen = ({ navigation }) => {
       }, {});
   };
 
-  // Handle quantity change
+  // Handle quantity change - PASS itemFromFoodBank
   const handleQuantityChange = async (itemId, newQuantity) => {
     console.log(
       `[Inventory Update] Item ID: ${itemId}, New Quantity: ${newQuantity}`
@@ -217,7 +327,12 @@ const GroceryInventoryScreen = ({ navigation }) => {
             `[Auto-Add] Adding ${item.name} to shopping list with quantity:`,
             restockAmount
           );
-          await autoAddToShoppingList(itemId, item, restockAmount);
+          await autoAddToShoppingList(
+            itemId,
+            item,
+            restockAmount,
+            itemFromFoodBank
+          );
         }
       } else if (newQuantity > 0 && oldQuantity === 0) {
         // CASE 1: Add to inventory (0 → positive)
@@ -254,7 +369,12 @@ const GroceryInventoryScreen = ({ navigation }) => {
             `[Auto-Add] Adding ${item.name} to shopping list with quantity:`,
             restockAmount
           );
-          await autoAddToShoppingList(itemId, item, restockAmount);
+          await autoAddToShoppingList(
+            itemId,
+            item,
+            restockAmount,
+            itemFromFoodBank
+          );
         }
       }
 
@@ -292,36 +412,48 @@ const GroceryInventoryScreen = ({ navigation }) => {
   };
 
   // Render item card
-  const renderItemCard = (item, itemId) => {
-    // Get shopping list quantity for this item (shoppingList is an array)
-    const shoppingListItem = Array.isArray(groceries?.shoppingList)
-      ? groceries.shoppingList.find((listItem) => listItem.id === itemId)
-      : null;
-    const shoppingListQty = shoppingListItem?.quantity || 0;
+const renderItemCard = (item, itemId) => {
+  // Get shopping list quantity for this item (shoppingList is an array)
+  const shoppingListItem = Array.isArray(groceries?.shoppingList)
+    ? groceries.shoppingList.find((listItem) => listItem.id === itemId)
+    : null;
+  const shoppingListQty = shoppingListItem?.quantity || 0;
 
-    // Get inventory quantity for this item
-    const inventoryQty = groceries?.inventory?.[itemId]?.quantity || 0;
+  // Get inventory quantity for this item
+  const inventoryQty = groceries?.inventory?.[itemId]?.quantity || 0;
 
-    // Get restock amount from food bank
-    const foodBankItem = Object.values(foodBank || {})
-      .flat()
-      .find((bankItem) => bankItem.id === itemId);
-    const restockAmount = foodBankItem?.restockAmount || 1;
+  // Get restock amount from food bank
+  const foodBankItem = Object.values(foodBank || {})
+    .flat()
+    .find((bankItem) => bankItem.id === itemId);
+  const restockAmount = foodBankItem?.restockAmount || 1;
 
-    return (
-      <FoodItemForList
-        key={itemId}
-        item={{ id: itemId, name: item.name }}
-        currentQuantity={item.quantity}
-        shoppingListQuantity={shoppingListQty}
-        restockAmount={restockAmount}
-        inventoryQuantity={inventoryQty}
-        onUpdateQuantity={handleQuantityChange}
-        onQuickAddPress={handleQuickAddPress} // <- Use the modal handler
-        isInventory={true}
-      />
-    );
-  };
+  // Check if item has ingredients
+  const hasIngredients = foodBankItem?.ingredients && 
+                        Array.isArray(foodBankItem.ingredients) && 
+                        foodBankItem.ingredients.length > 0;
+
+  // If item has ingredients, check if it's in meals too
+  const mealItem = hasIngredients
+    ? meals.find((meal) => meal.id === itemId)
+    : null;
+
+  return (
+    <FoodItemForList
+      key={itemId}
+      item={item}
+      foodBankItem={foodBankItem}
+      mealItem={mealItem}
+      currentQuantity={item.quantity}
+      shoppingListQuantity={shoppingListQty}
+      restockAmount={restockAmount}
+      inventoryQuantity={inventoryQty}
+      onUpdateQuantity={handleQuantityChange}
+      onQuickAddPress={handleQuickAddPress}
+      isInventory={true}
+    />
+  );
+};
 
   // Render content based on view mode
   const renderContent = () => {
@@ -368,6 +500,8 @@ const GroceryInventoryScreen = ({ navigation }) => {
               category={category}
               items={categoryItems}
               foodBank={foodBank}
+              meals={meals}
+              groups={groups}
               inventory={groceries?.inventory}
               shoppingList={groceries?.shoppingList}
               onQuantityChange={handleQuantityChange}
@@ -592,13 +726,20 @@ const GroceryInventoryScreen = ({ navigation }) => {
       <QuickAddModal
         visible={quickAddModalVisible}
         restockAmount={restockAmountForQuickAdd}
+        foodBankItem={selectedFoodBankItemForQuickAdd}
         item={selectedItemForQuickAdd}
         shoppingList={shoppingList}
+        inventory={groceries?.inventory}
         onClose={() => setQuickAddModalVisible(false)}
-        onAddToList={(itemData, isUpdate) => {
-          if (isUpdate) {
+        onAddToList={(itemData, isUpdate, includeIngredients) => {
+          if (includeIngredients) {
+            console.log("Including ingredients in shopping list item.");
+            updateItemWithIngredients(itemData, isUpdate, groups);
+          } else if (isUpdate) {
+            console.log("Updating existing shopping list item.");
             updateShoppingListItem(itemData.id, itemData);
           } else {
+            console.log("Adding new item to shopping list.");
             addToShoppingList(itemData);
           }
         }}

@@ -10,10 +10,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import QuantityTracker from '../QuantityTracker';
 import { DateTime } from 'luxon';
 
-const QuickAddModal = ({ visible, item, shoppingList, restockAmount, onClose, onAddToList }) => {
+const QuickAddModal = ({ visible, item, shoppingList, restockAmount, foodBankItem, inventory, onClose, onAddToList }) => {
   const { theme, getSpacing, getTypography, getBorderRadius } = useTheme();
   const [quantity, setQuantity] = useState(restockAmount || 1);
   const greenColor = '#10B981';
+  console.log("ITEM IN MODAL:", item, "FOODBANK ITEM:", foodBankItem);
 
   // Reset quantity when modal opens with new item
   useEffect(() => {
@@ -34,32 +35,104 @@ const QuickAddModal = ({ visible, item, shoppingList, restockAmount, onClose, on
   };
 
   const handleAdd = () => {
-    if (shoppingListEntry) {
-      // Update existing entry
-      const updatedItem = {
-        ...shoppingListEntry,
-        quantity: (shoppingListEntry.quantity || 0) + quantity,
-        restockAmount: restockAmount,
-        updatedAt: DateTime.now().toISO(),
-      };
-      delete updatedItem.key;
-      delete updatedItem.restockAmount; // Remove restockAmount if it exists
-      console.log(`Updating shopping list item:`, updatedItem);
-      onAddToList(updatedItem, true); // true = isUpdate
+    let itemHasIngredients = foodBankItem?.ingredients && 
+                            Array.isArray(foodBankItem.ingredients) && 
+                            foodBankItem.ingredients.length > 0;
+    
+    console.log('Item has ingredients:', itemHasIngredients);
+    
+    if (itemHasIngredients) {
+      // Process each ingredient to see if we need to add it to the shopping list
+      const ingredientsToAdd = [];
+      
+      foodBankItem.ingredients.forEach(ingredient => {
+        // Calculate how much of this ingredient we need total
+        const totalNeeded = ingredient.quantity * quantity;
+        
+        // Check how much we have in inventory
+        const inventoryQty = inventory?.[ingredient.id]?.quantity || 0;
+        
+        // Check if this ingredient is already on the shopping list
+        const shoppingListIngredient = shoppingList?.find(item => item.id === ingredient.id);
+        
+        console.log(`Ingredient ${ingredient.name}: need ${totalNeeded}, have in inventory: ${inventoryQty}, on shopping list: ${!!shoppingListIngredient}`);
+        
+        // If we don't have enough in inventory, add the deficit to the shopping list
+        if (inventoryQty < totalNeeded) {
+          const deficit = totalNeeded - inventoryQty;
+          
+          // Create the ingredient object with the updateItem flag
+          ingredientsToAdd.push({
+            ...ingredient,
+            quantity: deficit,
+            updateItem: !!shoppingListIngredient
+          });
+          
+          console.log(`Need to add ${deficit} of ${ingredient.name} (updateItem: ${!!shoppingListIngredient})`);
+        } else {
+          console.log(`${ingredient.name} is already in inventory`);
+        }
+      });
+      
+      console.log('FINAL ingredientsToAdd array:', JSON.stringify(ingredientsToAdd, null, 2));
+      
+      // Add or update the main item
+      if (shoppingListEntry) {
+        const updatedItem = {
+          ...shoppingListEntry,
+          quantity: (shoppingListEntry.quantity || 0) + quantity,
+          updatedAt: DateTime.now().toISO(),
+        };
+        delete updatedItem.key;
+        delete updatedItem.restockAmount;
+        
+        // ALWAYS set ingredients if the item has them defined (even if empty)
+        updatedItem.ingredients = ingredientsToAdd;
+        
+        // ALWAYS call with includeIngredients: true for meal items
+        onAddToList(updatedItem, true, true);
+      } else {
+        const newItem = {
+          addedToInventory: false,
+          category: item.category || 'Uncategorized',
+          checked: false,
+          id: item.id,
+          name: item.name,
+          quantity: quantity,
+          updatedAt: DateTime.now().toISO(),
+        };
+        
+        // ALWAYS set ingredients if the item has them defined (even if empty)
+        newItem.ingredients = ingredientsToAdd;
+        
+        // ALWAYS call with includeIngredients: true for meal items
+        onAddToList(newItem, false, true);
+      }
     } else {
-      // Create new entry
-      const newItem = {
-        addedToInventory: false,
-        category: item.category || 'Uncategorized',
-        checked: false,
-        id: item.id,
-        name: item.name,
-        quantity: quantity,
-        updatedAt: DateTime.now().toISO(),
-      };
-      console.log(`Adding new shopping list item:`, newItem);
-      onAddToList(newItem, false); // false = isNew
+      // No ingredients - just add the item as normal
+      if (shoppingListEntry) {
+        const updatedItem = {
+          ...shoppingListEntry,
+          quantity: (shoppingListEntry.quantity || 0) + quantity,
+          updatedAt: DateTime.now().toISO(),
+        };
+        delete updatedItem.key;
+        delete updatedItem.restockAmount;
+        onAddToList(updatedItem, true, false);
+      } else {
+        const newItem = {
+          addedToInventory: false,
+          category: item.category || 'Uncategorized',
+          checked: false,
+          id: item.id,
+          name: item.name,
+          quantity: quantity,
+          updatedAt: DateTime.now().toISO(),
+        };
+        onAddToList(newItem, false, false);
+      }
     }
+    
     setQuantity(1);
     onClose();
   };
